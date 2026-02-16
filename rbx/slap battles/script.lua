@@ -1,7 +1,7 @@
 --[[
-    Slap Battles Auto Farm - Mobile Edition
-    + RemoteALL функция для локальной имитации робуксов
-    Оптимизировано для телефонов
+    Slap Battles Auto Farm
+    Все функции с переключателями
+    Оптимизировано для мобильных устройств
 ]]
 
 -- ═══════════════════════════════════════════════════════════════
@@ -14,279 +14,67 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local MarketplaceService = game:GetService("MarketplaceService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Определение мобильного устройства
-local IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local IsMobile = UserInputService.TouchEnabled
 
 -- ═══════════════════════════════════════════════════════════════
 -- КОНФИГУРАЦИЯ
 -- ═══════════════════════════════════════════════════════════════
 local Config = {
+    -- Основные
     Farming = false,
-    AutoRespawn = true,
-    SelectedGlove = "Default",
+    AutoRespawn = false,
+    TeleportBack = false,
+    AutoEquip = false,
+    
+    -- Атака
+    AutoAttack = false,
+    TeleportToTarget = false,
     AttackRange = 15,
-    FarmSpeed = 0.1,
-    TeleportBack = true,
-    AvoidEdge = true,
-    TargetMode = "Nearest",
-    SafeZoneY = -50,
-    SpawnPosition = Vector3.new(0, 50, 0),
+    FarmSpeed = 100,
+    
+    -- RemoteALL
     RemoteALL = false,
-    AutoEquip = true,
-    AntiAFK = true,
+    UnlockAllGloves = false,
+    SpoofRobux = false,
+    BypassPurchase = false,
+    
+    -- Движение
     SpeedBoost = false,
-    GodMode = false
-}
-
--- Список перчаток с ID
-local GlovesList = {
-    {Name = "Default", ID = 0, Robux = 0},
-    {Name = "Brick", ID = 1, Robux = 0},
-    {Name = "Bob", ID = 2, Robux = 0},
-    {Name = "Flash", ID = 3, Robux = 75},
-    {Name = "Coil", ID = 4, Robux = 0},
-    {Name = "Extended Coil", ID = 5, Robux = 0},
-    {Name = "Reverse", ID = 6, Robux = 0},
-    {Name = "Killstreak", ID = 7, Robux = 0},
-    {Name = "Reaper", ID = 8, Robux = 150},
-    {Name = "Phantom", ID = 9, Robux = 0},
-    {Name = "Nuclear", ID = 10, Robux = 0},
-    {Name = "Mitten", ID = 11, Robux = 0},
-    {Name = "Spider", ID = 12, Robux = 0},
-    {Name = "Duelist", ID = 13, Robux = 0},
-    {Name = "Blade", ID = 14, Robux = 199},
-    {Name = "Spin", ID = 15, Robux = 0},
-    {Name = "Curse", ID = 16, Robux = 0},
-    {Name = "Tycoon", ID = 17, Robux = 399},
-    {Name = "Overkill", ID = 18, Robux = 299},
-    {Name = "Glitch", ID = 19, Robux = 0},
-    {Name = "SLAPPLE", ID = 20, Robux = 0},
-    {Name = "Elude", ID = 21, Robux = 0},
-    {Name = "God Hand", ID = 22, Robux = 999},
-    {Name = "One Shot", ID = 23, Robux = 499},
-    {Name = "Lasso", ID = 24, Robux = 0},
-    {Name = "Orbit", ID = 25, Robux = 0},
-    {Name = "Snake", ID = 26, Robux = 0},
-    {Name = "Uppercut", ID = 27, Robux = 0},
-    {Name = "Combo", ID = 28, Robux = 0},
-    {Name = "Gravity", ID = 29, Robux = 0},
-    {Name = "Push", ID = 30, Robux = 0},
-    {Name = "Pull", ID = 31, Robux = 0},
-    {Name = "Mega Rock", ID = 32, Robux = 799},
-    {Name = "Diamond", ID = 33, Robux = 1999},
-    {Name = "Dev", ID = 34, Robux = 0},
-    {Name = "Custom", ID = 35, Robux = 599}
+    NoClip = false,
+    Fly = false,
+    InfiniteJump = false,
+    
+    -- Защита
+    AntiAFK = false,
+    AntiVoid = false,
+    GodMode = false,
+    AntiKnockback = false,
+    
+    -- Визуал
+    ESP = false,
+    ShowDistance = false,
+    Tracers = false,
+    
+    -- Настройки
+    TargetMode = "Nearest",
+    SelectedGlove = "Default",
+    WalkSpeed = 16,
+    JumpPower = 50,
+    FlySpeed = 50
 }
 
 -- ═══════════════════════════════════════════════════════════════
--- REMOTEALL СИСТЕМА
+-- СОЗДАНИЕ GUI
 -- ═══════════════════════════════════════════════════════════════
-local RemoteALLSystem = {}
-RemoteALLSystem.Enabled = false
-RemoteALLSystem.SpoofedRobux = 999999
-RemoteALLSystem.OwnedGloves = {}
-RemoteALLSystem.OriginalFunctions = {}
-
-function RemoteALLSystem:Init()
-    -- Помечаем все перчатки как купленные локально
-    for _, glove in ipairs(GlovesList) do
-        self.OwnedGloves[glove.Name] = true
-        self.OwnedGloves[glove.ID] = true
-    end
-    
-    -- Перехват MarketplaceService
-    if hookfunction then
-        -- Перехватываем проверку владения геймпассом
-        local oldUserOwnsGamePassAsync = MarketplaceService.UserOwnsGamePassAsync
-        self.OriginalFunctions.UserOwnsGamePassAsync = oldUserOwnsGamePassAsync
-        
-        hookfunction(MarketplaceService.UserOwnsGamePassAsync, function(self2, userId, gamePassId)
-            if RemoteALLSystem.Enabled then
-                return true -- Всегда возвращаем что владеем
-            end
-            return oldUserOwnsGamePassAsync(self2, userId, gamePassId)
-        end)
-        
-        -- Перехватываем PlayerOwnsAsset
-        local oldPlayerOwnsAsset = MarketplaceService.PlayerOwnsAsset
-        self.OriginalFunctions.PlayerOwnsAsset = oldPlayerOwnsAsset
-        
-        hookfunction(MarketplaceService.PlayerOwnsAsset, function(self2, player, assetId)
-            if RemoteALLSystem.Enabled then
-                return true
-            end
-            return oldPlayerOwnsAsset(self2, player, assetId)
-        end)
-    end
-    
-    -- Перехват Remote Events для магазина
-    self:HookRemotes()
-end
-
-function RemoteALLSystem:HookRemotes()
-    -- Ищем remote события магазина
-    local function findRemotes(parent)
-        for _, child in ipairs(parent:GetDescendants()) do
-            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                local name = child.Name:lower()
-                if name:find("buy") or name:find("purchase") or name:find("shop") or 
-                   name:find("glove") or name:find("unlock") or name:find("robux") then
-                    self:HookRemote(child)
-                end
-            end
-        end
-    end
-    
-    findRemotes(ReplicatedStorage)
-    
-    -- Следим за новыми remote событиями
-    ReplicatedStorage.DescendantAdded:Connect(function(child)
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-            local name = child.Name:lower()
-            if name:find("buy") or name:find("purchase") or name:find("shop") or 
-               name:find("glove") or name:find("unlock") then
-                task.wait(0.1)
-                self:HookRemote(child)
-            end
-        end
-    end)
-end
-
-function RemoteALLSystem:HookRemote(remote)
-    if self.OriginalFunctions[remote] then return end
-    
-    if remote:IsA("RemoteEvent") then
-        local oldFire = remote.FireServer
-        self.OriginalFunctions[remote] = oldFire
-        
-        -- Создаём обёртку
-        local mt = getrawmetatable(remote)
-        if mt and setreadonly then
-            setreadonly(mt, false)
-            local oldNamecall = mt.__namecall
-            mt.__namecall = newcclosure(function(self2, ...)
-                local method = getnamecallmethod()
-                if method == "FireServer" and RemoteALLSystem.Enabled then
-                    local args = {...}
-                    -- Модифицируем аргументы покупки
-                    for i, arg in ipairs(args) do
-                        if type(arg) == "table" then
-                            if arg.robux then arg.robux = 0 end
-                            if arg.price then arg.price = 0 end
-                            if arg.cost then arg.cost = 0 end
-                        end
-                    end
-                    return oldNamecall(self2, unpack(args))
-                end
-                return oldNamecall(self2, ...)
-            end)
-            setreadonly(mt, true)
-        end
-    end
-end
-
-function RemoteALLSystem:SpoofGloveOwnership()
-    -- Ищем локальные данные о перчатках
-    local playerData = LocalPlayer:FindFirstChild("PlayerData") or 
-                       LocalPlayer:FindFirstChild("Data") or
-                       LocalPlayer:FindFirstChild("Stats")
-    
-    if playerData then
-        local gloves = playerData:FindFirstChild("Gloves") or 
-                       playerData:FindFirstChild("OwnedGloves") or
-                       playerData:FindFirstChild("UnlockedGloves")
-        
-        if gloves then
-            for _, glove in ipairs(GlovesList) do
-                local gloveVal = gloves:FindFirstChild(glove.Name)
-                if gloveVal and gloveVal:IsA("BoolValue") then
-                    gloveVal.Value = true
-                elseif not gloveVal then
-                    local newVal = Instance.new("BoolValue")
-                    newVal.Name = glove.Name
-                    newVal.Value = true
-                    newVal.Parent = gloves
-                end
-            end
-        end
-    end
-    
-    -- Спуфим GUI магазина
-    self:SpoofShopGUI()
-end
-
-function RemoteALLSystem:SpoofShopGUI()
-    -- Ищем GUI магазина и меняем отображение
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-    
-    for _, gui in ipairs(playerGui:GetDescendants()) do
-        -- Меняем текст цен на "FREE" или "OWNED"
-        if gui:IsA("TextLabel") or gui:IsA("TextButton") then
-            local text = gui.Text:lower()
-            if text:find("r%$") or text:find("robux") or text:find("%d+") then
-                if text:find("buy") or text:find("purchase") then
-                    gui.Text = "✅ FREE"
-                    gui.TextColor3 = Color3.fromRGB(0, 255, 0)
-                end
-            end
-        end
-        
-        -- Разблокируем заблокированные кнопки
-        if gui:IsA("TextButton") or gui:IsA("ImageButton") then
-            if gui.Name:lower():find("locked") or gui.Name:lower():find("buy") then
-                gui.Active = true
-                gui.Visible = true
-                if gui:FindFirstChild("Lock") then
-                    gui.Lock.Visible = false
-                end
-            end
-        end
-    end
-end
-
-function RemoteALLSystem:Enable()
-    self.Enabled = true
-    self:SpoofGloveOwnership()
-    
-    -- Постоянно обновляем спуф
-    spawn(function()
-        while self.Enabled do
-            self:SpoofGloveOwnership()
-            task.wait(1)
-        end
-    end)
-end
-
-function RemoteALLSystem:Disable()
-    self.Enabled = false
-end
-
--- Инициализация
-RemoteALLSystem:Init()
-
--- ═══════════════════════════════════════════════════════════════
--- СОЗДАНИЕ МОБИЛЬНОГО GUI
--- ═══════════════════════════════════════════════════════════════
-
--- Размеры для мобильных устройств
-local ScreenSize = Camera.ViewportSize
-local Scale = IsMobile and math.min(ScreenSize.X / 400, 1.2) or 1
-local ButtonSize = IsMobile and 50 or 40
-local FontSize = IsMobile and 16 or 14
-
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SlapFarmMobile"
+ScreenGui.Name = "SlapFarmPro"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Защита GUI
 if syn then
     syn.protect_gui(ScreenGui)
     ScreenGui.Parent = game:GetService("CoreGui")
@@ -297,429 +85,315 @@ else
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- КНОПКА ОТКРЫТИЯ (МОБИЛЬНАЯ)
+-- ГЛАВНЫЙ ФРЕЙМ
 -- ═══════════════════════════════════════════════════════════════
-
-local OpenButton = Instance.new("ImageButton")
-OpenButton.Name = "OpenButton"
-OpenButton.Size = UDim2.new(0, 60, 0, 60)
-OpenButton.Position = UDim2.new(0, 15, 0.5, -30)
-OpenButton.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-OpenButton.Image = ""
-OpenButton.AutoButtonColor = true
-OpenButton.Parent = ScreenGui
-
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(1, 0)
-OpenCorner.Parent = OpenButton
-
-local OpenIcon = Instance.new("TextLabel")
-OpenIcon.Size = UDim2.new(1, 0, 1, 0)
-OpenIcon.BackgroundTransparency = 1
-OpenIcon.Text = "🥊"
-OpenIcon.TextSize = 30
-OpenIcon.Font = Enum.Font.GothamBold
-OpenIcon.Parent = OpenButton
-
-local OpenStroke = Instance.new("UIStroke")
-OpenStroke.Color = Color3.fromRGB(150, 100, 255)
-OpenStroke.Thickness = 3
-OpenStroke.Parent = OpenButton
-
--- Делаем кнопку перетаскиваемой
-local draggingOpen = false
-local dragStartOpen = nil
-local startPosOpen = nil
-
-OpenButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        draggingOpen = true
-        dragStartOpen = input.Position
-        startPosOpen = OpenButton.Position
-    end
-end)
-
-OpenButton.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        draggingOpen = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if draggingOpen and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-        local delta = input.Position - dragStartOpen
-        OpenButton.Position = UDim2.new(
-            startPosOpen.X.Scale, startPosOpen.X.Offset + delta.X,
-            startPosOpen.Y.Scale, startPosOpen.Y.Offset + delta.Y
-        )
-    end
-end)
-
--- ═══════════════════════════════════════════════════════════════
--- ГЛАВНЫЙ ФРЕЙМ (МОБИЛЬНАЯ ВЕРСИЯ)
--- ═══════════════════════════════════════════════════════════════
-
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 360, 0, 550)
+MainFrame.Size = IsMobile and UDim2.new(0.92, 0, 0.88, 0) or UDim2.new(0, 380, 0, 580)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
+MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 16)
+MainCorner.CornerRadius = UDim.new(0, 14)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(100, 50, 200)
+MainStroke.Color = Color3.fromRGB(120, 60, 220)
 MainStroke.Thickness = 2
 MainStroke.Parent = MainFrame
-
--- Градиент фона
-local MainGradient = Instance.new("UIGradient")
-MainGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 15, 35)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 20))
-})
-MainGradient.Rotation = 45
-MainGradient.Parent = MainFrame
 
 -- ═══════════════════════════════════════════════════════════════
 -- ЗАГОЛОВОК
 -- ═══════════════════════════════════════════════════════════════
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
 
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 55)
-TitleBar.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 14)
+HeaderCorner.Parent = Header
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 16)
-TitleCorner.Parent = TitleBar
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Size = UDim2.new(1, 0, 0, 15)
+HeaderFix.Position = UDim2.new(0, 0, 1, -15)
+HeaderFix.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Parent = Header
 
-local TitleFix = Instance.new("Frame")
-TitleFix.Size = UDim2.new(1, 0, 0, 20)
-TitleFix.Position = UDim2.new(0, 0, 1, -20)
-TitleFix.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
-TitleFix.BorderSizePixel = 0
-TitleFix.Parent = TitleBar
-
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -120, 1, 0)
-TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "🥊 SLAP FARM PRO"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 20
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.Parent = TitleBar
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -100, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🥊 SLAP FARM PRO"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
 
 -- Кнопка свернуть
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "Minimize"
-MinimizeButton.Size = UDim2.new(0, 45, 0, 45)
-MinimizeButton.Position = UDim2.new(1, -100, 0, 5)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-MinimizeButton.Text = "—"
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 24
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Parent = TitleBar
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 40, 0, 40)
+MinBtn.Position = UDim2.new(1, -90, 0, 5)
+MinBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
+MinBtn.Text = "—"
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextSize = 20
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Parent = Header
 
 local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 10)
-MinCorner.Parent = MinimizeButton
+MinCorner.CornerRadius = UDim.new(0, 8)
+MinCorner.Parent = MinBtn
 
 -- Кнопка закрытия
-local CloseButton = Instance.new("TextButton")
-CloseButton.Name = "Close"
-CloseButton.Size = UDim2.new(0, 45, 0, 45)
-CloseButton.Position = UDim2.new(1, -50, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.Text = "✕"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 20
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = TitleBar
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 40, 0, 40)
+CloseBtn.Position = UDim2.new(1, -45, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 18
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = Header
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 10)
-CloseCorner.Parent = CloseButton
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseBtn
 
 -- ═══════════════════════════════════════════════════════════════
--- ТАБЫ
+-- СТАТУС ПАНЕЛЬ
 -- ═══════════════════════════════════════════════════════════════
+local StatusBar = Instance.new("Frame")
+StatusBar.Name = "StatusBar"
+StatusBar.Size = UDim2.new(1, -20, 0, 45)
+StatusBar.Position = UDim2.new(0, 10, 0, 55)
+StatusBar.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+StatusBar.BorderSizePixel = 0
+StatusBar.Parent = MainFrame
 
-local TabBar = Instance.new("Frame")
-TabBar.Name = "TabBar"
-TabBar.Size = UDim2.new(1, -20, 0, 50)
-TabBar.Position = UDim2.new(0, 10, 0, 60)
-TabBar.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
-TabBar.BorderSizePixel = 0
-TabBar.Parent = MainFrame
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 10)
+StatusCorner.Parent = StatusBar
 
-local TabCorner = Instance.new("UICorner")
-TabCorner.CornerRadius = UDim.new(0, 10)
-TabCorner.Parent = TabBar
+local StatusIcon = Instance.new("TextLabel")
+StatusIcon.Size = UDim2.new(0, 40, 1, 0)
+StatusIcon.BackgroundTransparency = 1
+StatusIcon.Text = "⏸️"
+StatusIcon.TextSize = 22
+StatusIcon.Parent = StatusBar
 
-local TabLayout = Instance.new("UIListLayout")
-TabLayout.FillDirection = Enum.FillDirection.Horizontal
-TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-TabLayout.Padding = UDim.new(0, 5)
-TabLayout.Parent = TabBar
-
-local Tabs = {"🎮 Фарм", "🥊 Перчатки", "💎 RemoteALL", "⚙️ Настройки"}
-local TabButtons = {}
-local TabContents = {}
-local CurrentTab = 1
-
-for i, tabName in ipairs(Tabs) do
-    local TabButton = Instance.new("TextButton")
-    TabButton.Name = "Tab" .. i
-    TabButton.Size = UDim2.new(0, 80, 0, 40)
-    TabButton.BackgroundColor3 = i == 1 and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(50, 45, 70)
-    TabButton.Text = tabName
-    TabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TabButton.TextSize = IsMobile and 11 or 12
-    TabButton.Font = Enum.Font.GothamBold
-    TabButton.TextWrapped = true
-    TabButton.Parent = TabBar
-    
-    local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 8)
-    BtnCorner.Parent = TabButton
-    
-    TabButtons[i] = TabButton
-end
+local StatusText = Instance.new("TextLabel")
+StatusText.Name = "StatusText"
+StatusText.Size = UDim2.new(1, -45, 1, 0)
+StatusText.Position = UDim2.new(0, 45, 0, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Готов к работе | Цель: — | Slaps: 0"
+StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusText.TextSize = IsMobile and 12 or 13
+StatusText.Font = Enum.Font.Gotham
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.TextTruncate = Enum.TextTruncate.AtEnd
+StatusText.Parent = StatusBar
 
 -- ═══════════════════════════════════════════════════════════════
--- КОНТЕНТ ТАБОВ
+-- КОНТЕНТ (СКРОЛЛ)
 -- ═══════════════════════════════════════════════════════════════
+local Content = Instance.new("ScrollingFrame")
+Content.Name = "Content"
+Content.Size = UDim2.new(1, -20, 1, -115)
+Content.Position = UDim2.new(0, 10, 0, 105)
+Content.BackgroundTransparency = 1
+Content.ScrollBarThickness = 4
+Content.ScrollBarImageColor3 = Color3.fromRGB(120, 60, 220)
+Content.CanvasSize = UDim2.new(0, 0, 0, 0)
+Content.Parent = MainFrame
 
-local ContentContainer = Instance.new("Frame")
-ContentContainer.Name = "ContentContainer"
-ContentContainer.Size = UDim2.new(1, -20, 1, -130)
-ContentContainer.Position = UDim2.new(0, 10, 0, 120)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.Parent = MainFrame
+local ContentLayout = Instance.new("UIListLayout")
+ContentLayout.Padding = UDim.new(0, 6)
+ContentLayout.Parent = Content
 
--- Функция создания контента таба
-local function CreateTabContent(index)
-    local Content = Instance.new("ScrollingFrame")
-    Content.Name = "Content" .. index
-    Content.Size = UDim2.new(1, 0, 1, 0)
-    Content.BackgroundTransparency = 1
-    Content.ScrollBarThickness = 4
-    Content.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 200)
-    Content.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Content.Visible = index == 1
-    Content.Parent = ContentContainer
-    
-    local Layout = Instance.new("UIListLayout")
-    Layout.Padding = UDim.new(0, 8)
-    Layout.Parent = Content
-    
-    -- Авто-размер canvas
-    Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        Content.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y + 20)
-    end)
-    
-    TabContents[index] = Content
-    return Content
-end
-
-for i = 1, #Tabs do
-    CreateTabContent(i)
-end
+ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Content.CanvasSize = UDim2.new(0, 0, 0, ContentLayout.AbsoluteContentSize.Y + 20)
+end)
 
 -- ═══════════════════════════════════════════════════════════════
--- ФУНКЦИИ UI
+-- ФУНКЦИИ СОЗДАНИЯ UI
 -- ═══════════════════════════════════════════════════════════════
 
-local function CreateMobileToggle(parent, name, default, callback)
-    local Toggle = Instance.new("Frame")
-    Toggle.Name = name
-    Toggle.Size = UDim2.new(1, 0, 0, 55)
-    Toggle.BackgroundColor3 = Color3.fromRGB(35, 30, 55)
-    Toggle.BorderSizePixel = 0
-    Toggle.Parent = parent
+local function CreateSection(name, icon)
+    local Section = Instance.new("Frame")
+    Section.Name = "Section_" .. name
+    Section.Size = UDim2.new(1, 0, 0, 32)
+    Section.BackgroundColor3 = Color3.fromRGB(60, 40, 100)
+    Section.BorderSizePixel = 0
+    Section.Parent = Content
     
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 12)
-    Corner.Parent = Toggle
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = Section
     
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.65, 0, 1, 0)
-    Label.Position = UDim2.new(0, 15, 0, 0)
+    Label.Size = UDim2.new(1, 0, 1, 0)
     Label.BackgroundTransparency = 1
-    Label.Text = name
-    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = IsMobile and 15 or 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.TextWrapped = true
-    Label.Parent = Toggle
+    Label.Text = (icon or "▸") .. " " .. name
+    Label.TextColor3 = Color3.fromRGB(200, 170, 255)
+    Label.TextSize = IsMobile and 14 or 13
+    Label.Font = Enum.Font.GothamBold
+    Label.Parent = Section
     
-    local ToggleButton = Instance.new("Frame")
-    ToggleButton.Size = UDim2.new(0, 65, 0, 32)
-    ToggleButton.Position = UDim2.new(1, -80, 0.5, -16)
-    ToggleButton.BackgroundColor3 = default and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(60, 55, 80)
-    ToggleButton.Parent = Toggle
+    return Section
+end
+
+local function CreateToggle(name, configKey, description)
+    local Toggle = Instance.new("Frame")
+    Toggle.Name = "Toggle_" .. configKey
+    Toggle.Size = UDim2.new(1, 0, 0, description and 52 or 44)
+    Toggle.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    Toggle.BorderSizePixel = 0
+    Toggle.Parent = Content
     
-    local ToggleCorner = Instance.new("UICorner")
-    ToggleCorner.CornerRadius = UDim.new(1, 0)
-    ToggleCorner.Parent = ToggleButton
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 10)
+    Corner.Parent = Toggle
+    
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0.7, -10, 0, 22)
+    NameLabel.Position = UDim2.new(0, 12, 0, description and 6 or 11)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = name
+    NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NameLabel.TextSize = IsMobile and 14 or 13
+    NameLabel.Font = Enum.Font.GothamBold
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.Parent = Toggle
+    
+    if description then
+        local DescLabel = Instance.new("TextLabel")
+        DescLabel.Size = UDim2.new(0.7, -10, 0, 18)
+        DescLabel.Position = UDim2.new(0, 12, 0, 28)
+        DescLabel.BackgroundTransparency = 1
+        DescLabel.Text = description
+        DescLabel.TextColor3 = Color3.fromRGB(150, 150, 170)
+        DescLabel.TextSize = IsMobile and 11 or 10
+        DescLabel.Font = Enum.Font.Gotham
+        DescLabel.TextXAlignment = Enum.TextXAlignment.Left
+        DescLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        DescLabel.Parent = Toggle
+    end
+    
+    local SwitchBG = Instance.new("Frame")
+    SwitchBG.Size = UDim2.new(0, 55, 0, 28)
+    SwitchBG.Position = UDim2.new(1, -67, 0.5, -14)
+    SwitchBG.BackgroundColor3 = Config[configKey] and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(60, 60, 80)
+    SwitchBG.Parent = Toggle
+    
+    local SwitchCorner = Instance.new("UICorner")
+    SwitchCorner.CornerRadius = UDim.new(1, 0)
+    SwitchCorner.Parent = SwitchBG
     
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 26, 0, 26)
-    Circle.Position = default and UDim2.new(1, -29, 0.5, -13) or UDim2.new(0, 3, 0.5, -13)
+    Circle.Size = UDim2.new(0, 22, 0, 22)
+    Circle.Position = Config[configKey] and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Circle.Parent = ToggleButton
+    Circle.Parent = SwitchBG
     
     local CircleCorner = Instance.new("UICorner")
     CircleCorner.CornerRadius = UDim.new(1, 0)
     CircleCorner.Parent = Circle
     
-    local enabled = default
+    local ClickBtn = Instance.new("TextButton")
+    ClickBtn.Size = UDim2.new(1, 0, 1, 0)
+    ClickBtn.BackgroundTransparency = 1
+    ClickBtn.Text = ""
+    ClickBtn.Parent = Toggle
     
-    local ClickButton = Instance.new("TextButton")
-    ClickButton.Size = UDim2.new(1, 0, 1, 0)
-    ClickButton.BackgroundTransparency = 1
-    ClickButton.Text = ""
-    ClickButton.Parent = Toggle
-    
-    ClickButton.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        
-        local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad)
-        
-        TweenService:Create(ToggleButton, tweenInfo, {
-            BackgroundColor3 = enabled and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(60, 55, 80)
+    local function UpdateVisual()
+        local enabled = Config[configKey]
+        TweenService:Create(SwitchBG, TweenInfo.new(0.2), {
+            BackgroundColor3 = enabled and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(60, 60, 80)
         }):Play()
-        
-        TweenService:Create(Circle, tweenInfo, {
-            Position = enabled and UDim2.new(1, -29, 0.5, -13) or UDim2.new(0, 3, 0.5, -13)
-        }):Play()
-        
-        callback(enabled)
-    end)
-    
-    return Toggle, function(val)
-        enabled = val
-        local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad)
-        TweenService:Create(ToggleButton, tweenInfo, {
-            BackgroundColor3 = enabled and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(60, 55, 80)
-        }):Play()
-        TweenService:Create(Circle, tweenInfo, {
-            Position = enabled and UDim2.new(1, -29, 0.5, -13) or UDim2.new(0, 3, 0.5, -13)
+        TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
+            Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
         }):Play()
     end
-end
-
-local function CreateMobileButton(parent, name, color, callback)
-    local Button = Instance.new("TextButton")
-    Button.Name = name
-    Button.Size = UDim2.new(1, 0, 0, 55)
-    Button.BackgroundColor3 = color or Color3.fromRGB(100, 50, 200)
-    Button.Text = name
-    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Button.TextSize = IsMobile and 16 or 14
-    Button.Font = Enum.Font.GothamBold
-    Button.Parent = parent
     
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 12)
-    Corner.Parent = Button
-    
-    local Stroke = Instance.new("UIStroke")
-    Stroke.Color = Color3.fromRGB(150, 100, 255)
-    Stroke.Thickness = 1
-    Stroke.Transparency = 0.5
-    Stroke.Parent = Button
-    
-    Button.MouseButton1Click:Connect(function()
-        -- Анимация нажатия
-        TweenService:Create(Button, TweenInfo.new(0.1), {
-            Size = UDim2.new(0.98, 0, 0, 52)
-        }):Play()
-        task.wait(0.1)
-        TweenService:Create(Button, TweenInfo.new(0.1), {
-            Size = UDim2.new(1, 0, 0, 55)
-        }):Play()
-        
-        callback()
+    ClickBtn.MouseButton1Click:Connect(function()
+        Config[configKey] = not Config[configKey]
+        UpdateVisual()
     end)
     
-    return Button
+    return Toggle, UpdateVisual
 end
 
-local function CreateMobileSlider(parent, name, min, max, default, callback)
+local function CreateSlider(name, configKey, min, max, description)
     local Slider = Instance.new("Frame")
-    Slider.Name = name
-    Slider.Size = UDim2.new(1, 0, 0, 70)
-    Slider.BackgroundColor3 = Color3.fromRGB(35, 30, 55)
+    Slider.Name = "Slider_" .. configKey
+    Slider.Size = UDim2.new(1, 0, 0, 65)
+    Slider.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
     Slider.BorderSizePixel = 0
-    Slider.Parent = parent
+    Slider.Parent = Content
     
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 12)
+    Corner.CornerRadius = UDim.new(0, 10)
     Corner.Parent = Slider
     
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.6, 0, 0, 30)
-    Label.Position = UDim2.new(0, 15, 0, 5)
-    Label.BackgroundTransparency = 1
-    Label.Text = name
-    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = IsMobile and 15 or 14
-    Label.Font = Enum.Font.Gotham
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Slider
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0.6, 0, 0, 20)
+    NameLabel.Position = UDim2.new(0, 12, 0, 8)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = name
+    NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NameLabel.TextSize = IsMobile and 13 or 12
+    NameLabel.Font = Enum.Font.GothamBold
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.Parent = Slider
     
     local ValueLabel = Instance.new("TextLabel")
-    ValueLabel.Name = "Value"
-    ValueLabel.Size = UDim2.new(0, 60, 0, 28)
-    ValueLabel.Position = UDim2.new(1, -75, 0, 5)
-    ValueLabel.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-    ValueLabel.Text = tostring(default)
+    ValueLabel.Size = UDim2.new(0, 50, 0, 22)
+    ValueLabel.Position = UDim2.new(1, -62, 0, 6)
+    ValueLabel.BackgroundColor3 = Color3.fromRGB(100, 60, 180)
+    ValueLabel.Text = tostring(Config[configKey])
     ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ValueLabel.TextSize = 14
+    ValueLabel.TextSize = 12
     ValueLabel.Font = Enum.Font.GothamBold
     ValueLabel.Parent = Slider
     
     local ValCorner = Instance.new("UICorner")
-    ValCorner.CornerRadius = UDim.new(0, 8)
+    ValCorner.CornerRadius = UDim.new(0, 6)
     ValCorner.Parent = ValueLabel
     
     local SliderBar = Instance.new("Frame")
-    SliderBar.Size = UDim2.new(1, -30, 0, 12)
-    SliderBar.Position = UDim2.new(0, 15, 0, 45)
-    SliderBar.BackgroundColor3 = Color3.fromRGB(50, 45, 75)
+    SliderBar.Size = UDim2.new(1, -24, 0, 10)
+    SliderBar.Position = UDim2.new(0, 12, 0, 42)
+    SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
     SliderBar.Parent = Slider
     
     local BarCorner = Instance.new("UICorner")
     BarCorner.CornerRadius = UDim.new(1, 0)
     BarCorner.Parent = SliderBar
     
-    local SliderFill = Instance.new("Frame")
-    SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    SliderFill.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-    SliderFill.Parent = SliderBar
+    local percent = (Config[configKey] - min) / (max - min)
+    
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new(percent, 0, 1, 0)
+    Fill.BackgroundColor3 = Color3.fromRGB(120, 60, 220)
+    Fill.Parent = SliderBar
     
     local FillCorner = Instance.new("UICorner")
     FillCorner.CornerRadius = UDim.new(1, 0)
-    FillCorner.Parent = SliderFill
+    FillCorner.Parent = Fill
     
-    -- Ручка слайдера
     local Handle = Instance.new("Frame")
-    Handle.Size = UDim2.new(0, 24, 0, 24)
-    Handle.Position = UDim2.new((default - min) / (max - min), -12, 0.5, -12)
+    Handle.Size = UDim2.new(0, 20, 0, 20)
+    Handle.Position = UDim2.new(percent, -10, 0.5, -10)
     Handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Handle.Parent = SliderBar
     
@@ -727,36 +401,35 @@ local function CreateMobileSlider(parent, name, min, max, default, callback)
     HandleCorner.CornerRadius = UDim.new(1, 0)
     HandleCorner.Parent = Handle
     
-    local SliderButton = Instance.new("TextButton")
-    SliderButton.Size = UDim2.new(1, 20, 1, 20)
-    SliderButton.Position = UDim2.new(0, -10, 0, -10)
-    SliderButton.BackgroundTransparency = 1
-    SliderButton.Text = ""
-    SliderButton.Parent = SliderBar
+    local SliderBtn = Instance.new("TextButton")
+    SliderBtn.Size = UDim2.new(1, 20, 1, 20)
+    SliderBtn.Position = UDim2.new(0, -10, 0, -10)
+    SliderBtn.BackgroundTransparency = 1
+    SliderBtn.Text = ""
+    SliderBtn.Parent = SliderBar
     
     local dragging = false
     
-    local function UpdateSlider(inputPos)
+    local function Update(inputX)
         local barPos = SliderBar.AbsolutePosition.X
         local barSize = SliderBar.AbsoluteSize.X
+        local pct = math.clamp((inputX - barPos) / barSize, 0, 1)
+        local value = math.floor(min + (max - min) * pct)
         
-        local percent = math.clamp((inputPos - barPos) / barSize, 0, 1)
-        local value = math.floor(min + (max - min) * percent)
-        
-        SliderFill.Size = UDim2.new(percent, 0, 1, 0)
-        Handle.Position = UDim2.new(percent, -12, 0.5, -12)
+        Config[configKey] = value
         ValueLabel.Text = tostring(value)
-        callback(value)
+        Fill.Size = UDim2.new(pct, 0, 1, 0)
+        Handle.Position = UDim2.new(pct, -10, 0.5, -10)
     end
     
-    SliderButton.InputBegan:Connect(function(input)
+    SliderBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            UpdateSlider(input.Position.X)
+            Update(input.Position.X)
         end
     end)
     
-    SliderButton.InputEnded:Connect(function(input)
+    SliderBtn.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
         end
@@ -764,678 +437,652 @@ local function CreateMobileSlider(parent, name, min, max, default, callback)
     
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-            UpdateSlider(input.Position.X)
+            Update(input.Position.X)
         end
     end)
     
     return Slider
 end
 
-local function CreateSection(parent, name)
-    local Section = Instance.new("Frame")
-    Section.Name = name
-    Section.Size = UDim2.new(1, 0, 0, 35)
-    Section.BackgroundColor3 = Color3.fromRGB(50, 40, 80)
-    Section.BorderSizePixel = 0
-    Section.Parent = parent
+local function CreateButton(name, icon, color, callback)
+    local Button = Instance.new("TextButton")
+    Button.Name = "Button_" .. name
+    Button.Size = UDim2.new(1, 0, 0, 44)
+    Button.BackgroundColor3 = color or Color3.fromRGB(100, 60, 180)
+    Button.Text = (icon or "") .. " " .. name
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = IsMobile and 14 or 13
+    Button.Font = Enum.Font.GothamBold
+    Button.Parent = Content
     
     local Corner = Instance.new("UICorner")
     Corner.CornerRadius = UDim.new(0, 10)
-    Corner.Parent = Section
+    Corner.Parent = Button
     
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, 0, 1, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = name
-    Label.TextColor3 = Color3.fromRGB(180, 140, 255)
-    Label.TextSize = IsMobile and 15 or 14
-    Label.Font = Enum.Font.GothamBold
-    Label.Parent = Section
-    
-    return Section
-end
-
-local function CreateGloveButton(parent, gloveData)
-    local GloveBtn = Instance.new("TextButton")
-    GloveBtn.Name = gloveData.Name
-    GloveBtn.Size = UDim2.new(1, 0, 0, 60)
-    GloveBtn.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
-    GloveBtn.Text = ""
-    GloveBtn.Parent = parent
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 10)
-    Corner.Parent = GloveBtn
-    
-    local GloveName = Instance.new("TextLabel")
-    GloveName.Size = UDim2.new(0.6, 0, 0.5, 0)
-    GloveName.Position = UDim2.new(0, 15, 0, 5)
-    GloveName.BackgroundTransparency = 1
-    GloveName.Text = "🥊 " .. gloveData.Name
-    GloveName.TextColor3 = Color3.fromRGB(255, 255, 255)
-    GloveName.TextSize = IsMobile and 15 or 14
-    GloveName.Font = Enum.Font.GothamBold
-    GloveName.TextXAlignment = Enum.TextXAlignment.Left
-    GloveName.Parent = GloveBtn
-    
-    local PriceLabel = Instance.new("TextLabel")
-    PriceLabel.Size = UDim2.new(0.6, 0, 0.4, 0)
-    PriceLabel.Position = UDim2.new(0, 15, 0.5, 0)
-    PriceLabel.BackgroundTransparency = 1
-    PriceLabel.Text = gloveData.Robux > 0 and ("💎 " .. gloveData.Robux .. " R$") or "✅ Бесплатно"
-    PriceLabel.TextColor3 = gloveData.Robux > 0 and Color3.fromRGB(255, 200, 100) or Color3.fromRGB(100, 255, 100)
-    PriceLabel.TextSize = IsMobile and 13 or 12
-    PriceLabel.Font = Enum.Font.Gotham
-    PriceLabel.TextXAlignment = Enum.TextXAlignment.Left
-    PriceLabel.Parent = GloveBtn
-    
-    local SelectBtn = Instance.new("TextButton")
-    SelectBtn.Size = UDim2.new(0, 80, 0, 35)
-    SelectBtn.Position = UDim2.new(1, -95, 0.5, -17)
-    SelectBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-    SelectBtn.Text = "Выбрать"
-    SelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SelectBtn.TextSize = 12
-    SelectBtn.Font = Enum.Font.GothamBold
-    SelectBtn.Parent = GloveBtn
-    
-    local SelCorner = Instance.new("UICorner")
-    SelCorner.CornerRadius = UDim.new(0, 8)
-    SelCorner.Parent = SelectBtn
-    
-    SelectBtn.MouseButton1Click:Connect(function()
-        Config.SelectedGlove = gloveData.Name
-        
-        -- Обновляем визуал всех кнопок
-        for _, btn in ipairs(parent:GetChildren()) do
-            if btn:IsA("TextButton") then
-                local sel = btn:FindFirstChild("TextButton")
-                if sel then
-                    sel.BackgroundColor3 = btn.Name == gloveData.Name and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(100, 50, 200)
-                    sel.Text = btn.Name == gloveData.Name and "✓" or "Выбрать"
-                end
-            end
-        end
-        
-        -- Если RemoteALL включен, пытаемся экипировать
-        if Config.RemoteALL then
-            EquipGlove(gloveData.Name)
-        end
+    Button.MouseButton1Click:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.1), {Size = UDim2.new(0.98, 0, 0, 42)}):Play()
+        task.wait(0.1)
+        TweenService:Create(Button, TweenInfo.new(0.1), {Size = UDim2.new(1, 0, 0, 44)}):Play()
+        callback()
     end)
     
-    return GloveBtn
+    return Button
+end
+
+local function CreateDropdown(name, configKey, options)
+    local Dropdown = Instance.new("Frame")
+    Dropdown.Name = "Dropdown_" .. configKey
+    Dropdown.Size = UDim2.new(1, 0, 0, 44)
+    Dropdown.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    Dropdown.BorderSizePixel = 0
+    Dropdown.ClipsDescendants = true
+    Dropdown.Parent = Content
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 10)
+    Corner.Parent = Dropdown
+    
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0.5, 0, 0, 44)
+    NameLabel.Position = UDim2.new(0, 12, 0, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = name
+    NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NameLabel.TextSize = IsMobile and 13 or 12
+    NameLabel.Font = Enum.Font.GothamBold
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.Parent = Dropdown
+    
+    local SelectedBtn = Instance.new("TextButton")
+    SelectedBtn.Size = UDim2.new(0, 110, 0, 30)
+    SelectedBtn.Position = UDim2.new(1, -122, 0, 7)
+    SelectedBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 140)
+    SelectedBtn.Text = Config[configKey] .. " ▼"
+    SelectedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SelectedBtn.TextSize = 11
+    SelectedBtn.Font = Enum.Font.GothamBold
+    SelectedBtn.Parent = Dropdown
+    
+    local SelCorner = Instance.new("UICorner")
+    SelCorner.CornerRadius = UDim.new(0, 6)
+    SelCorner.Parent = SelectedBtn
+    
+    local OptionsFrame = Instance.new("Frame")
+    OptionsFrame.Size = UDim2.new(1, -20, 0, #options * 32 + 5)
+    OptionsFrame.Position = UDim2.new(0, 10, 0, 48)
+    OptionsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+    OptionsFrame.Visible = false
+    OptionsFrame.Parent = Dropdown
+    
+    local OptCorner = Instance.new("UICorner")
+    OptCorner.CornerRadius = UDim.new(0, 8)
+    OptCorner.Parent = OptionsFrame
+    
+    local OptLayout = Instance.new("UIListLayout")
+    OptLayout.Padding = UDim.new(0, 2)
+    OptLayout.Parent = OptionsFrame
+    
+    local isOpen = false
+    
+    for _, opt in ipairs(options) do
+        local OptBtn = Instance.new("TextButton")
+        OptBtn.Size = UDim2.new(1, -6, 0, 30)
+        OptBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 75)
+        OptBtn.Text = opt
+        OptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        OptBtn.TextSize = 11
+        OptBtn.Font = Enum.Font.Gotham
+        OptBtn.Parent = OptionsFrame
+        
+        local OptBtnCorner = Instance.new("UICorner")
+        OptBtnCorner.CornerRadius = UDim.new(0, 5)
+        OptBtnCorner.Parent = OptBtn
+        
+        OptBtn.MouseButton1Click:Connect(function()
+            Config[configKey] = opt
+            SelectedBtn.Text = opt .. " ▼"
+            isOpen = false
+            OptionsFrame.Visible = false
+            TweenService:Create(Dropdown, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 44)}):Play()
+        end)
+    end
+    
+    SelectedBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        OptionsFrame.Visible = isOpen
+        TweenService:Create(Dropdown, TweenInfo.new(0.2), {
+            Size = isOpen and UDim2.new(1, 0, 0, 52 + #options * 32) or UDim2.new(1, 0, 0, 44)
+        }):Play()
+    end)
+    
+    return Dropdown
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- СТАТУС ПАНЕЛЬ
+-- СОЗДАНИЕ ВСЕХ ЭЛЕМЕНТОВ
 -- ═══════════════════════════════════════════════════════════════
 
-local StatusPanel = Instance.new("Frame")
-StatusPanel.Name = "StatusPanel"
-StatusPanel.Size = UDim2.new(1, 0, 0, 70)
-StatusPanel.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
-StatusPanel.BorderSizePixel = 0
-StatusPanel.Parent = TabContents[1]
+-- ОСНОВНОЕ
+CreateSection("ОСНОВНОЙ ФАРМ", "🎮")
+CreateToggle("Автофарм", "Farming", "Автоматически фармит пощёчины")
+CreateToggle("Авто-атака", "AutoAttack", "Автоматически бьёт рядом")
+CreateToggle("Телепорт к цели", "TeleportToTarget", "Телепортирует к игроку")
+CreateToggle("Авто-респавн", "AutoRespawn", "Возрождение после смерти")
+CreateToggle("Телепорт назад", "TeleportBack", "Возврат при падении")
+CreateToggle("Авто-экипировка", "AutoEquip", "Экипирует перчатку")
 
-local StatusCorner = Instance.new("UICorner")
-StatusCorner.CornerRadius = UDim.new(0, 12)
-StatusCorner.Parent = StatusPanel
+-- НАСТРОЙКИ АТАКИ
+CreateSection("НАСТРОЙКИ АТАКИ", "⚔️")
+CreateSlider("Дистанция атаки", "AttackRange", 5, 50)
+CreateSlider("Скорость (ms)", "FarmSpeed", 50, 500)
+CreateDropdown("Режим цели", "TargetMode", {"Nearest", "Random", "MostSlaps", "LowestHP"})
 
-local StatusIcon = Instance.new("TextLabel")
-StatusIcon.Size = UDim2.new(0, 50, 1, 0)
-StatusIcon.BackgroundTransparency = 1
-StatusIcon.Text = "⏸️"
-StatusIcon.TextSize = 30
-StatusIcon.Font = Enum.Font.GothamBold
-StatusIcon.Parent = StatusPanel
+-- REMOTEALL
+CreateSection("REMOTEALL СИСТЕМА", "💎")
+CreateToggle("RemoteALL", "RemoteALL", "Локальный спуф покупок")
+CreateToggle("Разблокировать перчатки", "UnlockAllGloves", "Все перчатки доступны")
+CreateToggle("Спуф робуксов", "SpoofRobux", "Показывает 999999 R$")
+CreateToggle("Обход покупки", "BypassPurchase", "Покупка без оплаты")
 
-local StatusText = Instance.new("TextLabel")
-StatusText.Name = "StatusText"
-StatusText.Size = UDim2.new(1, -60, 1, -10)
-StatusText.Position = UDim2.new(0, 55, 0, 5)
-StatusText.BackgroundTransparency = 1
-StatusText.Text = "Статус: Ожидание\nЦель: Нет\nПощёчины: 0"
-StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
-StatusText.TextSize = IsMobile and 13 or 12
-StatusText.Font = Enum.Font.Gotham
-StatusText.TextXAlignment = Enum.TextXAlignment.Left
-StatusText.TextYAlignment = Enum.TextYAlignment.Center
-StatusText.Parent = StatusPanel
+-- ДВИЖЕНИЕ
+CreateSection("ДВИЖЕНИЕ", "🏃")
+CreateToggle("Ускорение", "SpeedBoost", "Увеличивает скорость")
+CreateToggle("NoClip", "NoClip", "Проход сквозь стены")
+CreateToggle("Полёт", "Fly", "Летать по карте")
+CreateToggle("Бесконечный прыжок", "InfiniteJump", "Прыгать в воздухе")
+CreateSlider("Скорость ходьбы", "WalkSpeed", 16, 200)
+CreateSlider("Сила прыжка", "JumpPower", 50, 200)
+CreateSlider("Скорость полёта", "FlySpeed", 20, 200)
 
--- ═══════════════════════════════════════════════════════════════
--- ЗАПОЛНЕНИЕ ТАБОВ
--- ═══════════════════════════════════════════════════════════════
+-- ЗАЩИТА
+CreateSection("ЗАЩИТА", "🛡️")
+CreateToggle("Анти-АФК", "AntiAFK", "Не выкидывает за АФК")
+CreateToggle("Анти-войд", "AntiVoid", "Защита от падения")
+CreateToggle("Бессмертие", "GodMode", "Бесконечное здоровье")
+CreateToggle("Анти-отброс", "AntiKnockback", "Нет отбрасывания")
 
--- ТАБ 1: ФАРМ
-CreateSection(TabContents[1], "⚡ ОСНОВНОЕ")
+-- ВИЗУАЛ
+CreateSection("ВИЗУАЛ", "👁️")
+CreateToggle("ESP игроков", "ESP", "Видеть игроков сквозь стены")
+CreateToggle("Показать дистанцию", "ShowDistance", "Расстояние до игроков")
+CreateToggle("Линии к игрокам", "Tracers", "Линии к целям")
 
-local farmToggle, setFarmToggle = CreateMobileToggle(TabContents[1], "🎮 Автофарм", false, function(enabled)
-    Config.Farming = enabled
-    StatusIcon.Text = enabled and "🟢" or "⏸️"
-end)
-
-CreateMobileToggle(TabContents[1], "🔄 Авто-респавн", true, function(enabled)
-    Config.AutoRespawn = enabled
-end)
-
-CreateMobileToggle(TabContents[1], "📍 Телепорт назад", true, function(enabled)
-    Config.TeleportBack = enabled
-end)
-
-CreateMobileToggle(TabContents[1], "🛡️ Избегать края", true, function(enabled)
-    Config.AvoidEdge = enabled
-end)
-
-CreateSection(TabContents[1], "🎯 НАСТРОЙКИ ЦЕЛИ")
-
-CreateMobileSlider(TabContents[1], "📏 Дистанция атаки", 5, 50, 15, function(value)
-    Config.AttackRange = value
-end)
-
-CreateMobileSlider(TabContents[1], "⚡ Скорость (мс)", 50, 500, 100, function(value)
-    Config.FarmSpeed = value / 1000
-end)
-
-CreateSection(TabContents[1], "🔧 БЫСТРЫЕ ДЕЙСТВИЯ")
-
-CreateMobileButton(TabContents[1], "💀 Респавн", Color3.fromRGB(200, 80, 80), function()
+-- БЫСТРЫЕ ДЕЙСТВИЯ
+CreateSection("БЫСТРЫЕ ДЕЙСТВИЯ", "⚡")
+CreateButton("Респавн", "💀", Color3.fromRGB(200, 80, 80), function()
     if LocalPlayer.Character then
         LocalPlayer.Character:BreakJoints()
     end
 end)
 
-CreateMobileButton(TabContents[1], "📍 Телепорт на спавн", Color3.fromRGB(80, 150, 200), function()
+CreateButton("Телепорт на спавн", "📍", Color3.fromRGB(80, 150, 200), function()
     TeleportToSpawn()
 end)
 
-CreateMobileButton(TabContents[1], "🎯 К ближайшему игроку", Color3.fromRGB(200, 150, 80), function()
+CreateButton("К ближайшему игроку", "🎯", Color3.fromRGB(200, 150, 80), function()
     local target = GetNearestPlayer()
-    if target then
-        TeleportToTarget(target)
-    end
+    if target then TeleportToTarget(target) end
 end)
 
--- ТАБ 2: ПЕРЧАТКИ
-CreateSection(TabContents[2], "🥊 ВЫБЕРИТЕ ПЕРЧАТКУ")
-
-for _, gloveData in ipairs(GlovesList) do
-    CreateGloveButton(TabContents[2], gloveData)
-end
-
--- ТАБ 3: REMOTEALL
-CreateSection(TabContents[3], "💎 REMOTEALL СИСТЕМА")
-
-local InfoLabel = Instance.new("TextLabel")
-InfoLabel.Size = UDim2.new(1, 0, 0, 80)
-InfoLabel.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
-InfoLabel.Text = "⚠️ RemoteALL позволяет локально разблокировать все перчатки.\n\n💡 Другие игроки видят ваши удары, но не видят какую перчатку вы используете локально."
-InfoLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-InfoLabel.TextSize = IsMobile and 13 or 12
-InfoLabel.Font = Enum.Font.Gotham
-InfoLabel.TextWrapped = true
-InfoLabel.Parent = TabContents[3]
-
-local InfoCorner = Instance.new("UICorner")
-InfoCorner.CornerRadius = UDim.new(0, 12)
-InfoCorner.Parent = InfoLabel
-
-local remoteToggle, setRemoteToggle = CreateMobileToggle(TabContents[3], "💎 RemoteALL Активен", false, function(enabled)
-    Config.RemoteALL = enabled
-    if enabled then
-        RemoteALLSystem:Enable()
-    else
-        RemoteALLSystem:Disable()
-    end
-end)
-
-CreateSection(TabContents[3], "🔓 БЫСТРЫЕ ДЕЙСТВИЯ")
-
-CreateMobileButton(TabContents[3], "🔓 Разблокировать все перчатки", Color3.fromRGB(80, 200, 80), function()
+CreateButton("Обновить перчатки", "🔄", Color3.fromRGB(100, 180, 100), function()
     if Config.RemoteALL then
-        RemoteALLSystem:SpoofGloveOwnership()
-    else
-        setRemoteToggle(true)
-        Config.RemoteALL = true
-        RemoteALLSystem:Enable()
+        SpoofAllGloves()
     end
 end)
 
-CreateMobileButton(TabContents[3], "🛒 Открыть магазин (спуф)", Color3.fromRGB(200, 150, 50), function()
-    RemoteALLSystem:SpoofShopGUI()
-end)
+-- ═══════════════════════════════════════════════════════════════
+-- МИНИ КНОПКА (ПРИ СВОРАЧИВАНИИ)
+-- ═══════════════════════════════════════════════════════════════
+local MiniButton = Instance.new("TextButton")
+MiniButton.Name = "MiniButton"
+MiniButton.Size = UDim2.new(0, 55, 0, 55)
+MiniButton.Position = UDim2.new(0, 15, 0.5, -27)
+MiniButton.BackgroundColor3 = Color3.fromRGB(100, 60, 180)
+MiniButton.Text = "🥊"
+MiniButton.TextSize = 28
+MiniButton.Font = Enum.Font.GothamBold
+MiniButton.Visible = false
+MiniButton.Parent = ScreenGui
 
--- Информация о робуксах
-local RobuxInfo = Instance.new("Frame")
-RobuxInfo.Size = UDim2.new(1, 0, 0, 60)
-RobuxInfo.BackgroundColor3 = Color3.fromRGB(50, 40, 80)
-RobuxInfo.Parent = TabContents[3]
+local MiniCorner = Instance.new("UICorner")
+MiniCorner.CornerRadius = UDim.new(1, 0)
+MiniCorner.Parent = MiniButton
 
-local RobuxCorner = Instance.new("UICorner")
-RobuxCorner.CornerRadius = UDim.new(0, 12)
-RobuxCorner.Parent = RobuxInfo
+local MiniStroke = Instance.new("UIStroke")
+MiniStroke.Color = Color3.fromRGB(150, 100, 255)
+MiniStroke.Thickness = 2
+MiniStroke.Parent = MiniButton
 
-local RobuxText = Instance.new("TextLabel")
-RobuxText.Size = UDim2.new(1, -20, 1, 0)
-RobuxText.Position = UDim2.new(0, 10, 0, 0)
-RobuxText.BackgroundTransparency = 1
-RobuxText.Text = "💰 Локальные Робуксы: 999,999 R$\n✅ Все перчатки доступны локально"
-RobuxText.TextColor3 = Color3.fromRGB(100, 255, 100)
-RobuxText.TextSize = IsMobile and 14 or 13
-RobuxText.Font = Enum.Font.GothamBold
-RobuxText.Parent = RobuxInfo
+-- Перетаскивание мини кнопки
+local draggingMini = false
+local dragStartMini, startPosMini
 
--- ТАБ 4: НАСТРОЙКИ
-CreateSection(TabContents[4], "⚙️ ОБЩИЕ НАСТРОЙКИ")
-
-CreateMobileToggle(TabContents[4], "🎮 Авто-экипировка", true, function(enabled)
-    Config.AutoEquip = enabled
-end)
-
-CreateMobileToggle(TabContents[4], "☕ Анти-АФК", true, function(enabled)
-    Config.AntiAFK = enabled
-end)
-
-CreateMobileToggle(TabContents[4], "⚡ Ускорение (WalkSpeed)", false, function(enabled)
-    Config.SpeedBoost = enabled
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.WalkSpeed = enabled and 32 or 16
+MiniButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingMini = true
+        dragStartMini = input.Position
+        startPosMini = MiniButton.Position
     end
 end)
 
-CreateSection(TabContents[4], "🎯 РЕЖИМ ВЫБОРА ЦЕЛИ")
+MiniButton.InputEnded:Connect(function(input)
+    draggingMini = false
+end)
 
-local TargetModes = {"Nearest", "Random", "MostSlaps"}
-for _, mode in ipairs(TargetModes) do
-    local ModeBtn = Instance.new("TextButton")
-    ModeBtn.Size = UDim2.new(1, 0, 0, 50)
-    ModeBtn.BackgroundColor3 = Config.TargetMode == mode and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 35, 60)
-    ModeBtn.Text = mode == "Nearest" and "📍 Ближайший" or (mode == "Random" and "🎲 Случайный" or "🏆 Больше пощёчин")
-    ModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ModeBtn.TextSize = IsMobile and 15 or 14
-    ModeBtn.Font = Enum.Font.GothamBold
-    ModeBtn.Parent = TabContents[4]
-    
-    local ModeCorner = Instance.new("UICorner")
-    ModeCorner.CornerRadius = UDim.new(0, 10)
-    ModeCorner.Parent = ModeBtn
-    
-    ModeBtn.MouseButton1Click:Connect(function()
-        Config.TargetMode = mode
-        for _, btn in ipairs(TabContents[4]:GetChildren()) do
-            if btn:IsA("TextButton") then
-                btn.BackgroundColor3 = btn.Text:find(mode == "Nearest" and "Ближайший" or (mode == "Random" and "Случайный" or "пощёчин")) and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 35, 60)
-            end
-        end
-    end)
-end
+UserInputService.InputChanged:Connect(function(input)
+    if draggingMini then
+        local delta = input.Position - dragStartMini
+        MiniButton.Position = UDim2.new(
+            startPosMini.X.Scale, startPosMini.X.Offset + delta.X,
+            startPosMini.Y.Scale, startPosMini.Y.Offset + delta.Y
+        )
+    end
+end)
 
-CreateSection(TabContents[4], "📱 ИНТЕРФЕЙС")
-
-CreateMobileButton(TabContents[4], "🔄 Сбросить позицию GUI", Color3.fromRGB(150, 100, 200), function()
-    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    OpenButton.Position = UDim2.new(0, 15, 0.5, -30)
+MiniButton.MouseButton1Click:Connect(function()
+    if not draggingMini or (dragStartMini and (Vector2.new(dragStartMini.X, dragStartMini.Y) - UserInputService:GetMouseLocation()).Magnitude < 10) then
+        MainFrame.Visible = true
+        MiniButton.Visible = false
+    end
 end)
 
 -- ═══════════════════════════════════════════════════════════════
--- ПЕРЕКЛЮЧЕНИЕ ТАБОВ
+-- ОБРАБОТЧИКИ КНОПОК HEADER
 -- ═══════════════════════════════════════════════════════════════
+MinBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    MiniButton.Visible = true
+end)
 
-for i, btn in ipairs(TabButtons) do
-    btn.MouseButton1Click:Connect(function()
-        CurrentTab = i
-        
-        for j, tabBtn in ipairs(TabButtons) do
-            TweenService:Create(tabBtn, TweenInfo.new(0.2), {
-                BackgroundColor3 = j == i and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(50, 45, 70)
-            }):Play()
-        end
-        
-        for j, content in ipairs(TabContents) do
-            content.Visible = j == i
-        end
-    end)
-end
+CloseBtn.MouseButton1Click:Connect(function()
+    Config.Farming = false
+    ScreenGui:Destroy()
+end)
+
+-- Перетаскивание главного окна
+local draggingMain = false
+local dragStartMain, startPosMain
+
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingMain = true
+        dragStartMain = input.Position
+        startPosMain = MainFrame.Position
+    end
+end)
+
+Header.InputEnded:Connect(function(input)
+    draggingMain = false
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if draggingMain then
+        local delta = input.Position - dragStartMain
+        MainFrame.Position = UDim2.new(
+            startPosMain.X.Scale, startPosMain.X.Offset + delta.X,
+            startPosMain.Y.Scale, startPosMain.Y.Offset + delta.Y
+        )
+    end
+end)
 
 -- ═══════════════════════════════════════════════════════════════
 -- ОСНОВНЫЕ ФУНКЦИИ
 -- ═══════════════════════════════════════════════════════════════
 
 function GetNearestPlayer()
-    local nearestPlayer = nil
-    local nearestDistance = math.huge
+    local nearest, dist = nil, math.huge
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    local myPos = myChar.HumanoidRootPart.Position
     
-    local myCharacter = LocalPlayer.Character
-    if not myCharacter or not myCharacter:FindFirstChild("HumanoidRootPart") then
-        return nil
-    end
-    
-    local myPosition = myCharacter.HumanoidRootPart.Position
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    local distance = (character.HumanoidRootPart.Position - myPosition).Magnitude
-                    if distance < nearestDistance then
-                        nearestDistance = distance
-                        nearestPlayer = player
-                    end
-                end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health > 0 then
+                local d = (plr.Character.HumanoidRootPart.Position - myPos).Magnitude
+                if d < dist then dist, nearest = d, plr end
             end
         end
     end
-    
-    return nearestPlayer
+    return nearest
 end
 
 function GetRandomPlayer()
-    local validPlayers = {}
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    table.insert(validPlayers, player)
+    local valid = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health > 0 then table.insert(valid, plr) end
+        end
+    end
+    return #valid > 0 and valid[math.random(#valid)] or nil
+end
+
+function GetMostSlapsPlayer()
+    local target, maxSlaps = nil, -1
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health > 0 then
+                local slaps = 0
+                if plr:FindFirstChild("leaderstats") and plr.leaderstats:FindFirstChild("Slaps") then
+                    slaps = plr.leaderstats.Slaps.Value
                 end
+                if slaps > maxSlaps then maxSlaps, target = slaps, plr end
             end
         end
     end
-    
-    if #validPlayers > 0 then
-        return validPlayers[math.random(1, #validPlayers)]
-    end
-    
-    return nil
+    return target
 end
 
-function GetPlayerWithMostSlaps()
-    local targetPlayer = nil
-    local maxSlaps = -1
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            local character = player.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then
-                    local slaps = 0
-                    if player:FindFirstChild("leaderstats") then
-                        local slapsVal = player.leaderstats:FindFirstChild("Slaps")
-                        if slapsVal then
-                            slaps = slapsVal.Value
-                        end
-                    end
-                    
-                    if slaps > maxSlaps then
-                        maxSlaps = slaps
-                        targetPlayer = player
-                    end
-                end
+function GetLowestHPPlayer()
+    local target, lowestHP = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health > 0 and hum.Health < lowestHP then
+                lowestHP, target = hum.Health, plr
             end
         end
     end
-    
-    return targetPlayer
+    return target
 end
 
-function GetTargetPlayer()
-    if Config.TargetMode == "Nearest" then
-        return GetNearestPlayer()
-    elseif Config.TargetMode == "Random" then
-        return GetRandomPlayer()
-    elseif Config.TargetMode == "MostSlaps" then
-        return GetPlayerWithMostSlaps()
+function GetTarget()
+    local mode = Config.TargetMode
+    if mode == "Nearest" then return GetNearestPlayer()
+    elseif mode == "Random" then return GetRandomPlayer()
+    elseif mode == "MostSlaps" then return GetMostSlapsPlayer()
+    elseif mode == "LowestHP" then return GetLowestHPPlayer()
     end
     return GetNearestPlayer()
 end
 
 function TeleportToTarget(target)
-    if not target or not target.Character then return false end
-    
+    if not target or not target.Character then return end
     local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-    if not targetRoot then return false end
+    local myChar = LocalPlayer.Character
+    if not targetRoot or not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
     
-    local myCharacter = LocalPlayer.Character
-    if not myCharacter then return false end
-    
-    local myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return false end
-    
-    local offset = targetRoot.CFrame.LookVector * -3
-    myRoot.CFrame = targetRoot.CFrame + offset + Vector3.new(0, 1, 0)
-    
-    return true
+    myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -3)
 end
 
 function TeleportToSpawn()
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local root = character:FindFirstChild("HumanoidRootPart")
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
     
-    local spawnLocation = Workspace:FindFirstChildOfClass("SpawnLocation")
-    if spawnLocation then
-        root.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
-    else
-        root.CFrame = CFrame.new(Config.SpawnPosition)
-    end
-end
-
-function EquipGlove(gloveName)
-    local character = LocalPlayer.Character
-    if not character then return end
-    
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if not backpack then return end
-    
-    -- Ищем перчатку
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if tool:IsA("Tool") and tool.Name:lower():find(gloveName:lower()) then
-            character.Humanoid:EquipTool(tool)
-            return true
-        end
-    end
-    
-    -- Проверяем уже экипированную
-    for _, tool in ipairs(character:GetChildren()) do
-        if tool:IsA("Tool") then
-            return true
-        end
-    end
-    
-    -- Экипируем первую доступную
-    local firstTool = backpack:FindFirstChildOfClass("Tool")
-    if firstTool then
-        character.Humanoid:EquipTool(firstTool)
-        return true
-    end
-    
-    return false
+    local spawn = Workspace:FindFirstChildOfClass("SpawnLocation")
+    root.CFrame = spawn and spawn.CFrame + Vector3.new(0, 5, 0) or CFrame.new(0, 50, 0)
 end
 
 function Attack()
-    local character = LocalPlayer.Character
-    if not character then return end
+    local char = LocalPlayer.Character
+    if not char then return end
     
-    local glove = nil
-    
-    for _, tool in ipairs(character:GetChildren()) do
-        if tool:IsA("Tool") then
-            glove = tool
-            break
-        end
-    end
-    
+    local glove = char:FindFirstChildOfClass("Tool")
     if not glove then
-        local backpack = LocalPlayer:FindFirstChild("Backpack")
-        if backpack then
-            local firstTool = backpack:FindFirstChildOfClass("Tool")
-            if firstTool then
-                character.Humanoid:EquipTool(firstTool)
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            glove = bp:FindFirstChildOfClass("Tool")
+            if glove and char:FindFirstChild("Humanoid") then
+                char.Humanoid:EquipTool(glove)
                 task.wait(0.1)
-                glove = firstTool
             end
         end
     end
     
     if glove then
-        -- Разные способы активации
-        if glove:FindFirstChild("Slap") then
-            glove.Slap:FireServer()
-        elseif glove:FindFirstChild("SlapRemote") then
-            glove.SlapRemote:FireServer()
-        elseif glove:FindFirstChild("RemoteEvent") then
-            glove.RemoteEvent:FireServer()
-        elseif glove:FindFirstChild("Attack") then
-            glove.Attack:FireServer()
+        local remote = glove:FindFirstChild("Slap") or glove:FindFirstChild("SlapRemote") or 
+                       glove:FindFirstChild("RemoteEvent") or glove:FindFirstChild("Attack")
+        if remote and remote:IsA("RemoteEvent") then
+            remote:FireServer()
         else
             glove:Activate()
         end
     end
 end
 
-function CheckIfFallen()
-    local character = LocalPlayer.Character
-    if not character then return true end
-    
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return true end
-    
-    return root.Position.Y < Config.SafeZoneY
-end
-
--- ═══════════════════════════════════════════════════════════════
--- ОСНОВНОЙ ЦИКЛ ФАРМА
--- ═══════════════════════════════════════════════════════════════
-
-local SlapCount = 0
-
-local function FarmLoop()
-    while task.wait(Config.FarmSpeed) do
-        if not Config.Farming then
-            StatusText.Text = "Статус: ⏸️ Пауза\nЦель: —\nПощёчины: " .. SlapCount
-            continue
-        end
-        
-        local character = LocalPlayer.Character
-        if not character then
-            StatusText.Text = "Статус: ⏳ Загрузка...\nЦель: —\nПощёчины: " .. SlapCount
-            continue
-        end
-        
-        local humanoid = character:FindFirstChild("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            if Config.AutoRespawn then
-                StatusText.Text = "Статус: 💀 Респавн...\nЦель: —\nПощёчины: " .. SlapCount
-                task.wait(1)
+function SpoofAllGloves()
+    -- Ищем данные игрока
+    local data = LocalPlayer:FindFirstChild("PlayerData") or LocalPlayer:FindFirstChild("Data")
+    if data then
+        local gloves = data:FindFirstChild("Gloves") or data:FindFirstChild("OwnedGloves")
+        if gloves then
+            for _, child in ipairs(gloves:GetChildren()) do
+                if child:IsA("BoolValue") then child.Value = true end
             end
-            continue
         end
-        
-        -- Проверка падения
-        if CheckIfFallen() then
-            if Config.TeleportBack then
-                StatusText.Text = "Статус: 📍 Возврат...\nЦель: —\nПощёчины: " .. SlapCount
-                TeleportToSpawn()
-                task.wait(0.5)
-            end
-            continue
-        end
-        
-        -- Применяем буст скорости
-        if Config.SpeedBoost then
-            humanoid.WalkSpeed = 32
-        end
-        
-        -- Поиск цели
-        local target = GetTargetPlayer()
-        
-        if target then
-            local targetChar = target.Character
-            if targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-                local myRoot = character:FindFirstChild("HumanoidRootPart")
-                if myRoot then
-                    local distance = (targetChar.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                    
-                    if distance <= Config.AttackRange then
-                        TeleportToTarget(target)
-                        task.wait(0.05)
-                        Attack()
-                        SlapCount = SlapCount + 1
-                        StatusText.Text = "Статус: 🥊 Атака!\nЦель: " .. target.Name .. "\nПощёчины: " .. SlapCount
-                    else
-                        TeleportToTarget(target)
-                        StatusText.Text = "Статус: 🏃 Движение\nЦель: " .. target.Name .. "\nПощёчины: " .. SlapCount
+    end
+    
+    -- Спуфим GUI
+    local gui = LocalPlayer:FindFirstChild("PlayerGui")
+    if gui then
+        for _, desc in ipairs(gui:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                local txt = desc.Text:lower()
+                if txt:find("r%$") or txt:find("robux") then
+                    if txt:find("buy") or txt:find("purchase") or txt:find("unlock") then
+                        desc.Text = "✅ FREE"
+                        desc.TextColor3 = Color3.fromRGB(100, 255, 100)
                     end
                 end
             end
-        else
-            StatusText.Text = "Статус: 🔍 Поиск...\nЦель: —\nПощёчины: " .. SlapCount
         end
     end
 end
 
-spawn(FarmLoop)
-
 -- ═══════════════════════════════════════════════════════════════
--- АНТИ-АФК
+-- ОСНОВНОЙ ЦИКЛ
 -- ═══════════════════════════════════════════════════════════════
+local SlapCount = 0
 
+spawn(function()
+    while task.wait(Config.FarmSpeed / 1000) do
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        
+        -- Статус
+        local status = Config.Farming and "🟢 Активен" or "⏸️ Пауза"
+        local target = Config.Farming and GetTarget()
+        local targetName = target and target.Name or "—"
+        StatusText.Text = status .. " | Цель: " .. targetName .. " | Slaps: " .. SlapCount
+        StatusIcon.Text = Config.Farming and "🟢" or "⏸️"
+        
+        if not char or not hum or hum.Health <= 0 then continue end
+        
+        -- Скорость
+        if Config.SpeedBoost then
+            hum.WalkSpeed = Config.WalkSpeed
+            hum.JumpPower = Config.JumpPower
+        end
+        
+        -- GodMode
+        if Config.GodMode then
+            hum.Health = hum.MaxHealth
+        end
+        
+        -- Анти-войд
+        if Config.AntiVoid and root and root.Position.Y < -50 then
+            TeleportToSpawn()
+        end
+        
+        -- Телепорт назад
+        if Config.TeleportBack and root and root.Position.Y < -50 then
+            TeleportToSpawn()
+        end
+        
+        -- Фарм
+        if Config.Farming and target then
+            if Config.TeleportToTarget then
+                TeleportToTarget(target)
+            end
+            
+            if Config.AutoAttack then
+                local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+                if targetRoot and root then
+                    local dist = (targetRoot.Position - root.Position).Magnitude
+                    if dist <= Config.AttackRange then
+                        Attack()
+                        SlapCount = SlapCount + 1
+                    end
+                end
+            end
+        end
+        
+        -- RemoteALL
+        if Config.RemoteALL and Config.UnlockAllGloves then
+            SpoofAllGloves()
+        end
+    end
+end)
+
+-- NoClip
+spawn(function()
+    while task.wait() do
+        if Config.NoClip then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Fly
+local Flying = false
+local FlyBV, FlyBG
+
+spawn(function()
+    while task.wait(0.1) do
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChild("Humanoid")
+        
+        if Config.Fly and not Flying and root and hum then
+            Flying = true
+            FlyBV = Instance.new("BodyVelocity", root)
+            FlyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            FlyBV.Velocity = Vector3.zero
+            
+            FlyBG = Instance.new("BodyGyro", root)
+            FlyBG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            FlyBG.P = 9e4
+            
+        elseif not Config.Fly and Flying then
+            Flying = false
+            if FlyBV then FlyBV:Destroy() end
+            if FlyBG then FlyBG:Destroy() end
+        end
+        
+        if Flying and FlyBV and FlyBG then
+            local cam = Camera.CFrame
+            local dir = Vector3.zero
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
+            
+            FlyBV.Velocity = dir * Config.FlySpeed
+            FlyBG.CFrame = cam
+        end
+    end
+end)
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if Config.InfiniteJump then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- Anti-AFK
 spawn(function()
     while task.wait(60) do
         if Config.AntiAFK then
-            local VirtualUser = game:GetService("VirtualUser")
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:ClickButton2(Vector2.zero)
         end
     end
 end)
 
--- ═══════════════════════════════════════════════════════════════
--- ОБРАБОТЧИКИ СОБЫТИЙ
--- ═══════════════════════════════════════════════════════════════
-
--- Кнопка открытия
-OpenButton.MouseButton1Click:Connect(function()
-    if not draggingOpen or (dragStartOpen and (UserInputService:GetMouseLocation() - Vector2.new(dragStartOpen.X, dragStartOpen.Y)).Magnitude < 10) then
-        MainFrame.Visible = not MainFrame.Visible
-        
-        if MainFrame.Visible then
-            MainFrame.Size = UDim2.new(0, 0, 0, 0)
-            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-                Size = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 360, 0, 550)
-            }):Play()
-        end
-    end
-end)
-
--- Кнопка свернуть
-MinimizeButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
-
--- Кнопка закрытия
-CloseButton.MouseButton1Click:Connect(function()
-    Config.Farming = false
-    ScreenGui:Destroy()
-end)
-
--- Обработка смерти
+-- Anti-Knockback
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1)
-    if Config.AutoEquip then
-        EquipGlove(Config.SelectedGlove)
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root then
+        root:GetPropertyChangedSignal("Velocity"):Connect(function()
+            if Config.AntiKnockback then
+                root.Velocity = Vector3.zero
+                root.RotVelocity = Vector3.zero
+            end
+        end)
     end
 end)
 
--- ═══════════════════════════════════════════════════════════════
--- АНИМАЦИИ
--- ═══════════════════════════════════════════════════════════════
+-- ESP
+local ESPFolder = Instance.new("Folder", game.CoreGui)
+ESPFolder.Name = "ESP"
+
+spawn(function()
+    while task.wait(0.5) do
+        for _, child in ipairs(ESPFolder:GetChildren()) do child:Destroy() end
+        
+        if not Config.ESP then continue end
+        
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local head = plr.Character:FindFirstChild("Head")
+                if head then
+                    local bill = Instance.new("BillboardGui")
+                    bill.Adornee = head
+                    bill.Size = UDim2.new(0, 100, 0, 40)
+                    bill.StudsOffset = Vector3.new(0, 2, 0)
+                    bill.AlwaysOnTop = true
+                    bill.Parent = ESPFolder
+                    
+                    local name = Instance.new("TextLabel", bill)
+                    name.Size = UDim2.new(1, 0, 0.5, 0)
+                    name.BackgroundTransparency = 1
+                    name.Text = plr.Name
+                    name.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    name.TextStrokeTransparency = 0
+                    name.TextSize = 14
+                    name.Font = Enum.Font.GothamBold
+                    
+                    if Config.ShowDistance then
+                        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot then
+                            local dist = math.floor((head.Position - myRoot.Position).Magnitude)
+                            local distLabel = Instance.new("TextLabel", bill)
+                            distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+                            distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+                            distLabel.BackgroundTransparency = 1
+                            distLabel.Text = dist .. "m"
+                            distLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+                            distLabel.TextStrokeTransparency = 0
+                            distLabel.TextSize = 12
+                            distLabel.Font = Enum.Font.Gotham
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- Анимация обводки
 spawn(function()
@@ -1443,66 +1090,19 @@ spawn(function()
     while ScreenGui.Parent do
         hue = (hue + 0.003) % 1
         MainStroke.Color = Color3.fromHSV(hue, 0.7, 0.9)
-        OpenStroke.Color = Color3.fromHSV(hue, 0.7, 0.9)
+        MiniStroke.Color = Color3.fromHSV(hue, 0.7, 0.9)
         task.wait(0.03)
     end
 end)
 
--- Пульсация кнопки открытия
-spawn(function()
-    while ScreenGui.Parent do
-        TweenService:Create(OpenButton, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Size = UDim2.new(0, 65, 0, 65)
-        }):Play()
-        task.wait(1)
-        TweenService:Create(OpenButton, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Size = UDim2.new(0, 60, 0, 60)
-        }):Play()
-        task.wait(1)
-    end
-end)
-
--- ═══════════════════════════════════════════════════════════════
--- УВЕДОМЛЕНИЕ
--- ═══════════════════════════════════════════════════════════════
-
-local Notification = Instance.new("Frame")
-Notification.Size = UDim2.new(0, 280, 0, 80)
-Notification.Position = UDim2.new(0.5, -140, 0, -100)
-Notification.AnchorPoint = Vector2.new(0, 0)
-Notification.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
-Notification.Parent = ScreenGui
-
-local NotifCorner = Instance.new("UICorner")
-NotifCorner.CornerRadius = UDim.new(0, 12)
-NotifCorner.Parent = Notification
-
-local NotifText = Instance.new("TextLabel")
-NotifText.Size = UDim2.new(1, -20, 1, 0)
-NotifText.Position = UDim2.new(0, 10, 0, 0)
-NotifText.BackgroundTransparency = 1
-NotifText.Text = "✅ Slap Farm PRO загружен!\n🥊 Нажмите на кнопку слева\n💎 RemoteALL доступен"
-NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
-NotifText.TextSize = 14
-NotifText.Font = Enum.Font.GothamBold
-NotifText.TextWrapped = true
-NotifText.Parent = Notification
-
--- Анимация уведомления
-TweenService:Create(Notification, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
-    Position = UDim2.new(0.5, -140, 0, 20)
+-- Анимация появления
+MainFrame.Position = UDim2.new(0.5, 0, 1.5, 0)
+TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+    Position = UDim2.new(0.5, 0, 0.5, 0)
 }):Play()
 
-task.delay(4, function()
-    TweenService:Create(Notification, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-        Position = UDim2.new(0.5, -140, 0, -100)
-    }):Play()
-    task.wait(0.5)
-    Notification:Destroy()
-end)
-
 print("═══════════════════════════════════════")
-print("  🥊 SLAP BATTLES FARM PRO")
-print("  📱 Mobile Edition + RemoteALL")
-print("  💜 Скрипт успешно загружен!")
+print("  🥊 SLAP FARM PRO LOADED")
+print("  📱 All features with toggles")
+print("  💎 RemoteALL included")
 print("═══════════════════════════════════════")
