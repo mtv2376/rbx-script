@@ -1,7 +1,7 @@
 --[[
     ╔═══════════════════════════════════════════════════════════════╗
-    ║         ESCAPE TSUNAMI BRAINROT FARM v2.0                    ║
-    ║         Исправлен сбор через E (ProximityPrompt)             ║
+    ║         ESCAPE TSUNAMI BRAINROT FARM v2.1                    ║
+    ║         Исправлено: УДЕРЖАНИЕ E на 3-4 секунды               ║
     ╚═══════════════════════════════════════════════════════════════╝
 ]]
 
@@ -29,9 +29,13 @@ local Config = {
     AntiAFK = true,
     AutoCollect = true,
     TeleportBack = true,
-    CollectDelay = 0.5,
-    ScanDelay = 0.3,
-    TeleportRange = 3,
+    
+    -- ТАЙМИНГИ
+    HoldDuration = 3.5,      -- ВРЕМЯ УДЕРЖАНИЯ E (секунды)
+    CollectDelay = 0.5,      -- Задержка после сбора
+    ScanDelay = 0.3,         -- Частота сканирования
+    TeleportRange = 3,       -- Дистанция телепорта
+    
     SavedPosition = nil,
     
     -- Выбранные редкости брейнротов
@@ -74,27 +78,25 @@ local RarityColors = {
     Exclusive = Color3.fromRGB(50, 255, 255)
 }
 
--- Ключевые слова для определения редкости
+-- Ключевые слова
 local RarityKeywords = {
-    Common = {"common", "обычн", "обычный"},
-    Uncommon = {"uncommon", "необычн", "необычный"},
-    Rare = {"rare", "редк", "редкий"},
-    Epic = {"epic", "эпич", "эпический"},
-    Legendary = {"legendary", "legend", "легенд", "легендарн"},
-    Mythic = {"mythic", "myth", "мифич", "мифический"},
-    Secret = {"secret", "секрет", "секретн"},
-    Divine = {"divine", "божеств", "божественн"},
+    Common = {"common", "обычн"},
+    Uncommon = {"uncommon", "необычн"},
+    Rare = {"rare", "редк"},
+    Epic = {"epic", "эпич"},
+    Legendary = {"legendary", "legend", "легенд"},
+    Mythic = {"mythic", "myth", "мифич"},
+    Secret = {"secret", "секрет"},
+    Divine = {"divine", "божеств"},
     Exclusive = {"exclusive", "эксклюзив"}
 }
 
--- Ключевые слова для поиска брейнротов
 local BrainrotKeywords = {
     "brainrot", "brain", "rot", "skibidi", "toilet", "ohio", 
     "sigma", "rizz", "gyatt", "fanum", "tax", "mewing",
     "pet", "aura", "collectible", "npc", "spawn"
 }
 
--- Ключевые слова для лаки блоков
 local LuckyBlockKeywords = {
     "lucky", "block", "luckyblock", "crate", "chest", "box", 
     "reward", "loot", "prize", "gift", "present"
@@ -104,8 +106,7 @@ local LuckyBlockKeywords = {
 local Stats = {
     Collected = 0,
     BrainrotsCollected = 0,
-    LuckyBlocksCollected = 0,
-    SessionTime = 0
+    LuckyBlocksCollected = 0
 }
 
 -- ═══════════════════════════════════════════════════════════════
@@ -141,7 +142,6 @@ local Theme = {
     Secondary = Color3.fromRGB(70, 30, 150),
     Background = Color3.fromRGB(20, 15, 35),
     Card = Color3.fromRGB(30, 25, 50),
-    CardHover = Color3.fromRGB(40, 35, 65),
     Text = Color3.fromRGB(255, 255, 255),
     TextDim = Color3.fromRGB(150, 140, 180),
     Success = Color3.fromRGB(80, 200, 100),
@@ -235,7 +235,7 @@ end
 -- ═══════════════════════════════════════════════════════════════
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 450, 0, 620)
+MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.88, 0) or UDim2.new(0, 460, 0, 650)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Theme.Background
@@ -299,7 +299,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.new(0, 250, 0, 18)
 Subtitle.Position = UDim2.new(0, 70, 0, 40)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "v2.0 - E Key Collection"
+Subtitle.Text = "v2.1 - Hold E Collection"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 220)
 Subtitle.TextSize = 12
 Subtitle.Font = Enum.Font.Gotham
@@ -337,10 +337,10 @@ local MinBtn = CreateHeaderBtn("—", Color3.fromRGB(80, 80, 120), function() en
 local CloseBtn = CreateHeaderBtn("✕", Color3.fromRGB(200, 60, 60), function() end)
 
 -- ═══════════════════════════════════════════════════════════════
--- СТАТУС ПАНЕЛЬ
+-- СТАТУС ПАНЕЛЬ С ПРОГРЕСС БАРОМ
 -- ═══════════════════════════════════════════════════════════════
 local StatusPanel = Instance.new("Frame")
-StatusPanel.Size = UDim2.new(1, -20, 0, 90)
+StatusPanel.Size = UDim2.new(1, -20, 0, 110)
 StatusPanel.Position = UDim2.new(0, 10, 0, 70)
 StatusPanel.BackgroundColor3 = Theme.Card
 StatusPanel.BorderSizePixel = 0
@@ -348,15 +348,15 @@ StatusPanel.Parent = MainFrame
 Instance.new("UICorner", StatusPanel).CornerRadius = UDim.new(0, 12)
 
 local StatusIcon = Instance.new("TextLabel")
-StatusIcon.Size = UDim2.new(0, 60, 0, 60)
-StatusIcon.Position = UDim2.new(0, 5, 0, 5)
+StatusIcon.Size = UDim2.new(0, 55, 0, 55)
+StatusIcon.Position = UDim2.new(0, 8, 0, 8)
 StatusIcon.BackgroundTransparency = 1
 StatusIcon.Text = "⏸️"
-StatusIcon.TextSize = 35
+StatusIcon.TextSize = 32
 StatusIcon.Parent = StatusPanel
 
 local StatusTitle = Instance.new("TextLabel")
-StatusTitle.Size = UDim2.new(0.55, -70, 0, 25)
+StatusTitle.Size = UDim2.new(0.5, -70, 0, 22)
 StatusTitle.Position = UDim2.new(0, 65, 0, 10)
 StatusTitle.BackgroundTransparency = 1
 StatusTitle.Text = "Статус: Ожидание"
@@ -367,31 +367,45 @@ StatusTitle.TextXAlignment = Enum.TextXAlignment.Left
 StatusTitle.Parent = StatusPanel
 
 local StatusInfo = Instance.new("TextLabel")
-StatusInfo.Size = UDim2.new(0.55, -70, 0, 20)
-StatusInfo.Position = UDim2.new(0, 65, 0, 35)
+StatusInfo.Size = UDim2.new(0.5, -70, 0, 18)
+StatusInfo.Position = UDim2.new(0, 65, 0, 33)
 StatusInfo.BackgroundTransparency = 1
-StatusInfo.Text = "Собрано: 0"
+StatusInfo.Text = "Собрано: 0 | 🧠 0 | 🎁 0"
 StatusInfo.TextColor3 = Theme.TextDim
 StatusInfo.TextSize = 11
 StatusInfo.Font = Enum.Font.Gotham
 StatusInfo.TextXAlignment = Enum.TextXAlignment.Left
 StatusInfo.Parent = StatusPanel
 
-local StatusInfo2 = Instance.new("TextLabel")
-StatusInfo2.Size = UDim2.new(0.55, -70, 0, 20)
-StatusInfo2.Position = UDim2.new(0, 65, 0, 55)
-StatusInfo2.BackgroundTransparency = 1
-StatusInfo2.Text = "🧠 0 | 🎁 0"
-StatusInfo2.TextColor3 = Theme.TextDim
-StatusInfo2.TextSize = 11
-StatusInfo2.Font = Enum.Font.Gotham
-StatusInfo2.TextXAlignment = Enum.TextXAlignment.Left
-StatusInfo2.Parent = StatusPanel
+-- Прогресс бар для удержания E
+local HoldProgressBG = Instance.new("Frame")
+HoldProgressBG.Size = UDim2.new(0.55, -20, 0, 18)
+HoldProgressBG.Position = UDim2.new(0, 65, 0, 55)
+HoldProgressBG.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+HoldProgressBG.BorderSizePixel = 0
+HoldProgressBG.Parent = StatusPanel
+Instance.new("UICorner", HoldProgressBG).CornerRadius = UDim.new(1, 0)
+
+local HoldProgressFill = Instance.new("Frame")
+HoldProgressFill.Size = UDim2.new(0, 0, 1, 0)
+HoldProgressFill.BackgroundColor3 = Theme.Success
+HoldProgressFill.BorderSizePixel = 0
+HoldProgressFill.Parent = HoldProgressBG
+Instance.new("UICorner", HoldProgressFill).CornerRadius = UDim.new(1, 0)
+
+local HoldProgressText = Instance.new("TextLabel")
+HoldProgressText.Size = UDim2.new(1, 0, 1, 0)
+HoldProgressText.BackgroundTransparency = 1
+HoldProgressText.Text = "⌨️ Удержание E: 0.0s"
+HoldProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
+HoldProgressText.TextSize = 10
+HoldProgressText.Font = Enum.Font.GothamBold
+HoldProgressText.Parent = HoldProgressBG
 
 -- Кнопка Start/Stop
 local StartButton = Instance.new("TextButton")
-StartButton.Size = UDim2.new(0, 130, 0, 60)
-StartButton.Position = UDim2.new(1, -145, 0.5, -30)
+StartButton.Size = UDim2.new(0, 130, 0, 70)
+StartButton.Position = UDim2.new(1, -145, 0.5, -35)
 StartButton.BackgroundColor3 = Theme.Success
 StartButton.Text = "▶️ СТАРТ"
 StartButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -405,7 +419,7 @@ Instance.new("UICorner", StartButton).CornerRadius = UDim.new(0, 12)
 -- ═══════════════════════════════════════════════════════════════
 local TabContainer = Instance.new("Frame")
 TabContainer.Size = UDim2.new(1, -20, 0, 45)
-TabContainer.Position = UDim2.new(0, 10, 0, 165)
+TabContainer.Position = UDim2.new(0, 10, 0, 185)
 TabContainer.BackgroundColor3 = Theme.Card
 TabContainer.BorderSizePixel = 0
 TabContainer.Parent = MainFrame
@@ -429,8 +443,8 @@ local TabContents = {}
 local CurrentTab = 1
 
 local ContentContainer = Instance.new("Frame")
-ContentContainer.Size = UDim2.new(1, -20, 1, -230)
-ContentContainer.Position = UDim2.new(0, 10, 0, 215)
+ContentContainer.Size = UDim2.new(1, -20, 1, -250)
+ContentContainer.Position = UDim2.new(0, 10, 0, 235)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.ClipsDescendants = true
 ContentContainer.Parent = MainFrame
@@ -509,58 +523,41 @@ end
 
 local function CreateRarityToggle(parent, rarityName, configTable)
     local Toggle = Instance.new("Frame")
-    Toggle.Size = UDim2.new(1, 0, 0, 55)
+    Toggle.Size = UDim2.new(1, 0, 0, 50)
     Toggle.BackgroundColor3 = Theme.Card
     Toggle.BorderSizePixel = 0
     Toggle.Parent = parent
     Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 10)
     
     local RarityBadge = Instance.new("Frame")
-    RarityBadge.Size = UDim2.new(0, 8, 0.7, 0)
-    RarityBadge.Position = UDim2.new(0, 8, 0.15, 0)
+    RarityBadge.Size = UDim2.new(0, 6, 0.6, 0)
+    RarityBadge.Position = UDim2.new(0, 8, 0.2, 0)
     RarityBadge.BackgroundColor3 = RarityColors[rarityName] or Theme.Primary
     RarityBadge.BorderSizePixel = 0
     RarityBadge.Parent = Toggle
-    Instance.new("UICorner", RarityBadge).CornerRadius = UDim.new(0, 4)
-    
-    local RarityIcon = Instance.new("TextLabel")
-    RarityIcon.Size = UDim2.new(0, 35, 0, 35)
-    RarityIcon.Position = UDim2.new(0, 25, 0.5, -17)
-    RarityIcon.BackgroundColor3 = RarityColors[rarityName] or Theme.Primary
-    RarityIcon.BackgroundTransparency = 0.8
-    RarityIcon.Text = rarityName == "Common" and "⚪" or 
-                      rarityName == "Uncommon" and "🟢" or
-                      rarityName == "Rare" and "🔵" or
-                      rarityName == "Epic" and "🟣" or
-                      rarityName == "Legendary" and "🟡" or
-                      rarityName == "Mythic" and "🔴" or
-                      rarityName == "Secret" and "❤️" or
-                      rarityName == "Divine" and "✨" or "💎"
-    RarityIcon.TextSize = 20
-    RarityIcon.Parent = Toggle
-    Instance.new("UICorner", RarityIcon).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", RarityBadge).CornerRadius = UDim.new(0, 3)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.5, -80, 0, 25)
-    NameLabel.Position = UDim2.new(0, 70, 0.5, -12)
+    NameLabel.Size = UDim2.new(0.6, -30, 1, 0)
+    NameLabel.Position = UDim2.new(0, 25, 0, 0)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = rarityName
     NameLabel.TextColor3 = RarityColors[rarityName] or Theme.Text
-    NameLabel.TextSize = 15
+    NameLabel.TextSize = 14
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Toggle
     
     local SwitchBG = Instance.new("Frame")
-    SwitchBG.Size = UDim2.new(0, 55, 0, 28)
-    SwitchBG.Position = UDim2.new(1, -70, 0.5, -14)
+    SwitchBG.Size = UDim2.new(0, 50, 0, 26)
+    SwitchBG.Position = UDim2.new(1, -65, 0.5, -13)
     SwitchBG.BackgroundColor3 = configTable[rarityName] and Theme.Success or Color3.fromRGB(60, 60, 80)
     SwitchBG.Parent = Toggle
     Instance.new("UICorner", SwitchBG).CornerRadius = UDim.new(1, 0)
     
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 22, 0, 22)
-    Circle.Position = configTable[rarityName] and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
+    Circle.Size = UDim2.new(0, 20, 0, 20)
+    Circle.Position = configTable[rarityName] and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = SwitchBG
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
@@ -579,7 +576,7 @@ local function CreateRarityToggle(parent, rarityName, configTable)
             BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)
         }):Play()
         TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
-            Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
+            Position = enabled and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
         }):Play()
     end)
     
@@ -588,46 +585,46 @@ end
 
 local function CreateToggle(parent, name, configKey, desc)
     local Toggle = Instance.new("Frame")
-    Toggle.Size = UDim2.new(1, 0, 0, desc and 58 or 48)
+    Toggle.Size = UDim2.new(1, 0, 0, desc and 55 or 45)
     Toggle.BackgroundColor3 = Theme.Card
     Toggle.BorderSizePixel = 0
     Toggle.Parent = parent
     Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 10)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.65, 0, 0, 24)
+    NameLabel.Size = UDim2.new(0.65, 0, 0, 22)
     NameLabel.Position = UDim2.new(0, 15, 0, desc and 8 or 12)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = name
     NameLabel.TextColor3 = Theme.Text
-    NameLabel.TextSize = 14
+    NameLabel.TextSize = 13
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Toggle
     
     if desc then
         local DescLabel = Instance.new("TextLabel")
-        DescLabel.Size = UDim2.new(0.65, 0, 0, 18)
-        DescLabel.Position = UDim2.new(0, 15, 0, 32)
+        DescLabel.Size = UDim2.new(0.65, 0, 0, 16)
+        DescLabel.Position = UDim2.new(0, 15, 0, 30)
         DescLabel.BackgroundTransparency = 1
         DescLabel.Text = desc
         DescLabel.TextColor3 = Theme.TextDim
-        DescLabel.TextSize = 11
+        DescLabel.TextSize = 10
         DescLabel.Font = Enum.Font.Gotham
         DescLabel.TextXAlignment = Enum.TextXAlignment.Left
         DescLabel.Parent = Toggle
     end
     
     local SwitchBG = Instance.new("Frame")
-    SwitchBG.Size = UDim2.new(0, 55, 0, 28)
-    SwitchBG.Position = UDim2.new(1, -70, 0.5, -14)
+    SwitchBG.Size = UDim2.new(0, 50, 0, 26)
+    SwitchBG.Position = UDim2.new(1, -65, 0.5, -13)
     SwitchBG.BackgroundColor3 = Config[configKey] and Theme.Success or Color3.fromRGB(60, 60, 80)
     SwitchBG.Parent = Toggle
     Instance.new("UICorner", SwitchBG).CornerRadius = UDim.new(1, 0)
     
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 22, 0, 22)
-    Circle.Position = Config[configKey] and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
+    Circle.Size = UDim2.new(0, 20, 0, 20)
+    Circle.Position = Config[configKey] and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = SwitchBG
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
@@ -646,32 +643,34 @@ local function CreateToggle(parent, name, configKey, desc)
             BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)
         }):Play()
         TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
-            Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
+            Position = enabled and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
         }):Play()
     end)
 end
 
-local function CreateSlider(parent, name, configKey, min, max)
+local function CreateSlider(parent, name, configKey, min, max, step)
+    step = step or 0.1
+    
     local Slider = Instance.new("Frame")
-    Slider.Size = UDim2.new(1, 0, 0, 65)
+    Slider.Size = UDim2.new(1, 0, 0, 60)
     Slider.BackgroundColor3 = Theme.Card
     Slider.BorderSizePixel = 0
     Slider.Parent = parent
     Instance.new("UICorner", Slider).CornerRadius = UDim.new(0, 10)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.5, 0, 0, 24)
+    NameLabel.Size = UDim2.new(0.55, 0, 0, 22)
     NameLabel.Position = UDim2.new(0, 15, 0, 8)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = name
     NameLabel.TextColor3 = Theme.Text
-    NameLabel.TextSize = 13
+    NameLabel.TextSize = 12
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Slider
     
     local ValueBG = Instance.new("Frame")
-    ValueBG.Size = UDim2.new(0, 55, 0, 24)
+    ValueBG.Size = UDim2.new(0, 55, 0, 22)
     ValueBG.Position = UDim2.new(1, -70, 0, 6)
     ValueBG.BackgroundColor3 = Theme.Primary
     ValueBG.Parent = Slider
@@ -680,15 +679,15 @@ local function CreateSlider(parent, name, configKey, min, max)
     local ValueLabel = Instance.new("TextLabel")
     ValueLabel.Size = UDim2.new(1, 0, 1, 0)
     ValueLabel.BackgroundTransparency = 1
-    ValueLabel.Text = tostring(Config[configKey])
+    ValueLabel.Text = string.format("%.1f", Config[configKey])
     ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ValueLabel.TextSize = 12
+    ValueLabel.TextSize = 11
     ValueLabel.Font = Enum.Font.GothamBold
     ValueLabel.Parent = ValueBG
     
     local SliderBar = Instance.new("Frame")
     SliderBar.Size = UDim2.new(1, -30, 0, 10)
-    SliderBar.Position = UDim2.new(0, 15, 0, 45)
+    SliderBar.Position = UDim2.new(0, 15, 0, 42)
     SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
     SliderBar.Parent = Slider
     Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(1, 0)
@@ -702,8 +701,8 @@ local function CreateSlider(parent, name, configKey, min, max)
     Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
     
     local Handle = Instance.new("Frame")
-    Handle.Size = UDim2.new(0, 18, 0, 18)
-    Handle.Position = UDim2.new(pct, -9, 0.5, -9)
+    Handle.Size = UDim2.new(0, 16, 0, 16)
+    Handle.Position = UDim2.new(pct, -8, 0.5, -8)
     Handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Handle.Parent = SliderBar
     Instance.new("UICorner", Handle).CornerRadius = UDim.new(1, 0)
@@ -715,12 +714,12 @@ local function CreateSlider(parent, name, configKey, min, max)
         local barWidth = SliderBar.AbsoluteSize.X
         local newPct = math.clamp((inputX - barStart) / barWidth, 0, 1)
         local newVal = min + (max - min) * newPct
-        newVal = math.floor(newVal * 10) / 10
+        newVal = math.floor(newVal / step + 0.5) * step
         
         Config[configKey] = newVal
-        ValueLabel.Text = tostring(newVal)
+        ValueLabel.Text = string.format("%.1f", newVal)
         Fill.Size = UDim2.new(newPct, 0, 1, 0)
-        Handle.Position = UDim2.new(newPct, -9, 0.5, -9)
+        Handle.Position = UDim2.new(newPct, -8, 0.5, -8)
     end
     
     SliderBar.InputBegan:Connect(function(input)
@@ -741,27 +740,27 @@ end
 
 local function CreateButton(parent, name, icon, color, callback)
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(1, 0, 0, 50)
+    Button.Size = UDim2.new(1, 0, 0, 45)
     Button.BackgroundColor3 = color or Theme.Primary
     Button.Text = ""
     Button.Parent = parent
     Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 10)
     
     local Icon = Instance.new("TextLabel")
-    Icon.Size = UDim2.new(0, 45, 1, 0)
+    Icon.Size = UDim2.new(0, 40, 1, 0)
     Icon.Position = UDim2.new(0, 10, 0, 0)
     Icon.BackgroundTransparency = 1
     Icon.Text = icon or ""
-    Icon.TextSize = 22
+    Icon.TextSize = 20
     Icon.Parent = Button
     
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -65, 1, 0)
-    Label.Position = UDim2.new(0, 55, 0, 0)
+    Label.Size = UDim2.new(1, -60, 1, 0)
+    Label.Position = UDim2.new(0, 50, 0, 0)
     Label.BackgroundTransparency = 1
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = 14
+    Label.TextSize = 13
     Label.Font = Enum.Font.GothamBold
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Button
@@ -788,32 +787,22 @@ CreateSection(TabContents[1], "БЫСТРЫЙ ВЫБОР", "⚡")
 CreateButton(TabContents[1], "Выбрать все", "✅", Theme.Success, function()
     for _, r in ipairs(rarities) do
         Config.Brainrots[r] = true
-        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(1, -25, 0.5, -11)}):Play()
     end
     Notify("Брейнроты", "Все редкости выбраны", 2, "success")
+end)
+
+CreateButton(TabContents[1], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
+    for _, r in ipairs(rarities) do
+        Config.Brainrots[r] = r ~= "Common" and r ~= "Uncommon"
+    end
+    Notify("Брейнроты", "Выбраны: Rare и выше", 2, "success")
 end)
 
 CreateButton(TabContents[1], "Снять все", "❌", Theme.Error, function()
     for _, r in ipairs(rarities) do
         Config.Brainrots[r] = false
-        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Брейнроты", "Все редкости сняты", 2, "info")
-end)
-
-CreateButton(TabContents[1], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
-    for _, r in ipairs(rarities) do
-        local enabled = r ~= "Common" and r ~= "Uncommon"
-        Config.Brainrots[r] = enabled
-        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)}):Play()
-    end
-    Notify("Брейнроты", "Выбраны: Rare и выше", 2, "success")
 end)
 
 -- ТАБ 2: ЛАКИ БЛОКИ
@@ -830,52 +819,39 @@ CreateSection(TabContents[2], "БЫСТРЫЙ ВЫБОР", "⚡")
 CreateButton(TabContents[2], "Выбрать все", "✅", Theme.Success, function()
     for _, r in ipairs(rarities) do
         Config.LuckyBlocks[r] = true
-        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(1, -25, 0.5, -11)}):Play()
     end
     Notify("Лаки блоки", "Все редкости выбраны", 2, "success")
+end)
+
+CreateButton(TabContents[2], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
+    for _, r in ipairs(rarities) do
+        Config.LuckyBlocks[r] = r ~= "Common" and r ~= "Uncommon"
+    end
+    Notify("Лаки блоки", "Выбраны: Rare и выше", 2, "success")
 end)
 
 CreateButton(TabContents[2], "Снять все", "❌", Theme.Error, function()
     for _, r in ipairs(rarities) do
         Config.LuckyBlocks[r] = false
-        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Лаки блоки", "Все редкости сняты", 2, "info")
 end)
 
-CreateButton(TabContents[2], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
-    for _, r in ipairs(rarities) do
-        local enabled = r ~= "Common" and r ~= "Uncommon"
-        Config.LuckyBlocks[r] = enabled
-        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
-        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)}):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2), {Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)}):Play()
-    end
-    Notify("Лаки блоки", "Выбраны: Rare и выше", 2, "success")
-end)
-
 -- ТАБ 3: НАСТРОЙКИ
+CreateSection(TabContents[3], "ВРЕМЯ УДЕРЖАНИЯ E", "⌨️")
+CreateSlider(TabContents[3], "Удержание E (секунды)", "HoldDuration", 1, 6, 0.5)
+
 CreateSection(TabContents[3], "ОСНОВНЫЕ", "⚙️")
 CreateToggle(TabContents[3], "Анти-АФК", "AntiAFK", "Не кикает за бездействие")
 CreateToggle(TabContents[3], "Авто-сбор", "AutoCollect", "Автоматически собирать")
 CreateToggle(TabContents[3], "Телепорт назад", "TeleportBack", "Возвращаться после сбора")
 
 CreateSection(TabContents[3], "ТАЙМИНГИ", "⏱️")
-CreateSlider(TabContents[3], "Задержка сбора (сек)", "CollectDelay", 0.1, 2)
-CreateSlider(TabContents[3], "Задержка скана (сек)", "ScanDelay", 0.1, 2)
-CreateSlider(TabContents[3], "Дистанция ТП", "TeleportRange", 1, 10)
+CreateSlider(TabContents[3], "Задержка после сбора (сек)", "CollectDelay", 0.1, 2, 0.1)
+CreateSlider(TabContents[3], "Частота сканирования (сек)", "ScanDelay", 0.1, 2, 0.1)
+CreateSlider(TabContents[3], "Дистанция телепорта", "TeleportRange", 1, 10, 1)
 
 CreateSection(TabContents[3], "ДЕЙСТВИЯ", "⚡")
-CreateButton(TabContents[3], "Сбросить статистику", "🔄", Color3.fromRGB(100, 100, 150), function()
-    Stats.Collected = 0
-    Stats.BrainrotsCollected = 0
-    Stats.LuckyBlocksCollected = 0
-    Notify("Статистика", "Сброшена", 2, "info")
-end)
 
 CreateButton(TabContents[3], "Сохранить позицию", "📍", Color3.fromRGB(80, 150, 200), function()
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -892,8 +868,15 @@ CreateButton(TabContents[3], "Телепорт на позицию", "🏠", Col
             root.CFrame = Config.SavedPosition
         end
     else
-        Notify("Ошибка", "Сохраните позицию сначала", 2, "error")
+        Notify("Ошибка", "Сначала сохраните позицию", 2, "error")
     end
+end)
+
+CreateButton(TabContents[3], "Сбросить статистику", "🔄", Color3.fromRGB(100, 100, 150), function()
+    Stats.Collected = 0
+    Stats.BrainrotsCollected = 0
+    Stats.LuckyBlocksCollected = 0
+    Notify("Статистика", "Сброшена", 2, "info")
 end)
 
 -- ═══════════════════════════════════════════════════════════════
@@ -990,66 +973,136 @@ local function GetHumanoid()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- ФУНКЦИЯ СБОРА ЧЕРЕЗ E (PROXIMITY PROMPT)
+-- УДЕРЖАНИЕ E НА 3-4 СЕКУНДЫ
 -- ═══════════════════════════════════════════════════════════════
 
-local function FireProximityPrompt(prompt, holdDuration)
-    holdDuration = holdDuration or prompt.HoldDuration
+local function HoldKeyE(duration)
+    duration = duration or Config.HoldDuration
     
-    -- Метод 1: fireproximityprompt (лучший)
-    if fireproximityprompt then
-        fireproximityprompt(prompt, holdDuration)
+    local startTime = tick()
+    
+    -- Способ 1: keypress/keyrelease (лучший для эксплойтов)
+    if keypress and keyrelease then
+        pcall(function()
+            keypress(0x45) -- E key = 0x45
+        end)
+        
+        -- Обновляем прогресс бар во время удержания
+        spawn(function()
+            while tick() - startTime < duration do
+                local elapsed = tick() - startTime
+                local progress = elapsed / duration
+                
+                HoldProgressFill.Size = UDim2.new(progress, 0, 1, 0)
+                HoldProgressText.Text = string.format("⌨️ Удержание E: %.1fs / %.1fs", elapsed, duration)
+                
+                task.wait(0.05)
+            end
+            HoldProgressFill.Size = UDim2.new(1, 0, 1, 0)
+            HoldProgressText.Text = "✅ Собрано!"
+        end)
+        
+        -- Ждём нужное время
+        task.wait(duration)
+        
+        pcall(function()
+            keyrelease(0x45)
+        end)
+        
         return true
     end
     
-    -- Метод 2: Через события
-    local success = pcall(function()
-        -- Симулируем начало взаимодействия
-        prompt:InputHoldBegin()
-        
-        if holdDuration > 0 then
-            task.wait(holdDuration + 0.1)
-        else
-            task.wait(0.1)
-        end
-        
-        prompt:InputHoldEnd()
-    end)
-    
-    if success then return true end
-    
-    -- Метод 3: Триггер напрямую
-    success = pcall(function()
-        prompt.Triggered:Fire()
-    end)
-    
-    if success then return true end
-    
-    -- Метод 4: Через ProximityPromptService
-    success = pcall(function()
-        ProximityPromptService.PromptTriggered:Fire(prompt, LocalPlayer)
-    end)
-    
-    return success
-end
-
--- Симуляция нажатия E
-local function PressE()
-    -- Метод 1: VirtualInputManager
+    -- Способ 2: VirtualInputManager
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        task.wait(0.05)
+    end)
+    
+    spawn(function()
+        while tick() - startTime < duration do
+            local elapsed = tick() - startTime
+            local progress = elapsed / duration
+            
+            HoldProgressFill.Size = UDim2.new(progress, 0, 1, 0)
+            HoldProgressText.Text = string.format("⌨️ Удержание E: %.1fs / %.1fs", elapsed, duration)
+            
+            task.wait(0.05)
+        end
+        HoldProgressFill.Size = UDim2.new(1, 0, 1, 0)
+        HoldProgressText.Text = "✅ Собрано!"
+    end)
+    
+    task.wait(duration)
+    
+    pcall(function()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
     end)
     
-    -- Метод 2: keypress
-    if keypress and keyrelease then
+    return true
+end
+
+-- Активация ProximityPrompt с удержанием
+local function FireProximityPromptWithHold(prompt, duration)
+    duration = duration or Config.HoldDuration
+    
+    -- Переопределяем HoldDuration промпта если нужно
+    local originalHoldDuration = prompt.HoldDuration
+    
+    -- Метод 1: fireproximityprompt с длительностью
+    if fireproximityprompt then
+        -- Некоторые эксплойты поддерживают второй аргумент
         pcall(function()
-            keypress(0x45) -- E key
-            task.wait(0.05)
-            keyrelease(0x45)
+            fireproximityprompt(prompt, duration)
         end)
+        
+        -- Если не сработало мгновенно, симулируем удержание
+        spawn(function()
+            local startTime = tick()
+            while tick() - startTime < duration do
+                local elapsed = tick() - startTime
+                local progress = elapsed / duration
+                
+                HoldProgressFill.Size = UDim2.new(progress, 0, 1, 0)
+                HoldProgressText.Text = string.format("⌨️ Удержание: %.1fs / %.1fs", elapsed, duration)
+                
+                task.wait(0.05)
+            end
+            HoldProgressFill.Size = UDim2.new(1, 0, 1, 0)
+        end)
+        
+        task.wait(duration)
+        return true
     end
+    
+    -- Метод 2: Ручная симуляция через InputHoldBegin/End
+    local success = pcall(function()
+        prompt:InputHoldBegin()
+    end)
+    
+    if success then
+        spawn(function()
+            local startTime = tick()
+            while tick() - startTime < duration do
+                local elapsed = tick() - startTime
+                local progress = elapsed / duration
+                
+                HoldProgressFill.Size = UDim2.new(progress, 0, 1, 0)
+                HoldProgressText.Text = string.format("⌨️ Удержание: %.1fs / %.1fs", elapsed, duration)
+                
+                task.wait(0.05)
+            end
+            HoldProgressFill.Size = UDim2.new(1, 0, 1, 0)
+        end)
+        
+        task.wait(duration)
+        
+        pcall(function()
+            prompt:InputHoldEnd()
+        end)
+        
+        return true
+    end
+    
+    return false
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -1057,11 +1110,10 @@ end
 -- ═══════════════════════════════════════════════════════════════
 
 local function GetRarity(object)
-    -- Проверяем имя объекта
     local name = object.Name:lower()
     
-    -- Проверяем атрибуты
-    local rarityAttr = object:GetAttribute("Rarity") or object:GetAttribute("rarity") or object:GetAttribute("RARITY")
+    -- Атрибуты
+    local rarityAttr = object:GetAttribute("Rarity") or object:GetAttribute("rarity")
     if rarityAttr then
         local attrLower = tostring(rarityAttr):lower()
         for rarity, keywords in pairs(RarityKeywords) do
@@ -1073,7 +1125,7 @@ local function GetRarity(object)
         end
     end
     
-    -- Проверяем по имени объекта
+    -- По имени
     for rarity, keywords in pairs(RarityKeywords) do
         for _, keyword in ipairs(keywords) do
             if name:find(keyword) then
@@ -1082,7 +1134,7 @@ local function GetRarity(object)
         end
     end
     
-    -- Проверяем в потомках (GUI, TextLabels)
+    -- В потомках
     for _, desc in ipairs(object:GetDescendants()) do
         if desc:IsA("TextLabel") or desc:IsA("TextButton") then
             local text = desc.Text:lower()
@@ -1096,7 +1148,7 @@ local function GetRarity(object)
         end
     end
     
-    -- Проверяем родителя
+    -- Родитель
     if object.Parent then
         local parentName = object.Parent.Name:lower()
         for rarity, keywords in pairs(RarityKeywords) do
@@ -1138,35 +1190,17 @@ end
 local function FindAllCollectibles()
     local found = {}
     
-    -- Ищем все ProximityPrompts в игре
     for _, prompt in ipairs(Workspace:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") then
             local parent = prompt.Parent
             if parent then
-                local name = parent.Name:lower()
                 local rarity = GetRarity(parent)
-                
-                -- Проверяем, является ли это брейнротом
                 local isBrainrot = IsBrainrot(parent)
-                if isBrainrot and rarity and Config.Brainrots[rarity] then
-                    local pos = parent:IsA("Model") and parent:GetPivot().Position or 
-                               parent:IsA("BasePart") and parent.Position or
-                               prompt.Parent:IsA("BasePart") and prompt.Parent.Position
-                    
-                    if pos then
-                        table.insert(found, {
-                            Object = parent,
-                            Prompt = prompt,
-                            Position = pos,
-                            Rarity = rarity,
-                            Type = "Brainrot"
-                        })
-                    end
-                end
-                
-                -- Проверяем, является ли это лаки блоком
                 local isLucky = IsLuckyBlock(parent)
-                if isLucky and rarity and Config.LuckyBlocks[rarity] then
+                
+                if (isBrainrot and rarity and Config.Brainrots[rarity]) or
+                   (isLucky and rarity and Config.LuckyBlocks[rarity]) then
+                    
                     local pos = parent:IsA("Model") and parent:GetPivot().Position or 
                                parent:IsA("BasePart") and parent.Position or
                                prompt.Parent:IsA("BasePart") and prompt.Parent.Position
@@ -1174,57 +1208,24 @@ local function FindAllCollectibles()
                     if pos then
                         table.insert(found, {
                             Object = parent,
-                            Prompt = prompt,
-                            Position = pos,
-                            Rarity = rarity,
-                            Type = "LuckyBlock"
-                        })
-                    end
-                end
-                
-                -- Если редкость определена но тип неизвестен - проверяем просто по редкости
-                if not isBrainrot and not isLucky and rarity then
-                    -- Проверяем брейнроты
-                    if Config.Brainrots[rarity] then
-                        local pos = parent:IsA("Model") and parent:GetPivot().Position or 
-                                   parent:IsA("BasePart") and parent.Position or
-                                   prompt.Parent:IsA("BasePart") and prompt.Parent.Position
-                        
-                        if pos then
-                            table.insert(found, {
-                                Object = parent,
-                                Prompt = prompt,
-                                Position = pos,
-                                Rarity = rarity,
-                                Type = "Unknown"
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Также ищем модели без ProximityPrompt но с определённой редкостью
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if (obj:IsA("Model") or obj:IsA("BasePart")) and not obj:FindFirstChildOfClass("ProximityPrompt") then
-            local rarity = GetRarity(obj)
-            if rarity then
-                local isBrainrot = IsBrainrot(obj)
-                local isLucky = IsLuckyBlock(obj)
-                
-                if (isBrainrot and Config.Brainrots[rarity]) or (isLucky and Config.LuckyBlocks[rarity]) then
-                    -- Проверяем есть ли ProximityPrompt в потомках
-                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt", true)
-                    local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
-                    
-                    if pos then
-                        table.insert(found, {
-                            Object = obj,
                             Prompt = prompt,
                             Position = pos,
                             Rarity = rarity,
                             Type = isBrainrot and "Brainrot" or "LuckyBlock"
+                        })
+                    end
+                elseif rarity and (Config.Brainrots[rarity] or Config.LuckyBlocks[rarity]) then
+                    local pos = parent:IsA("Model") and parent:GetPivot().Position or 
+                               parent:IsA("BasePart") and parent.Position or
+                               prompt.Parent:IsA("BasePart") and prompt.Parent.Position
+                    
+                    if pos then
+                        table.insert(found, {
+                            Object = parent,
+                            Prompt = prompt,
+                            Position = pos,
+                            Rarity = rarity,
+                            Type = "Unknown"
                         })
                     end
                 end
@@ -1236,7 +1237,7 @@ local function FindAllCollectibles()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- ФУНКЦИЯ СБОРА
+-- ФУНКЦИЯ СБОРА С УДЕРЖАНИЕМ E
 -- ═══════════════════════════════════════════════════════════════
 
 local function CollectItem(item)
@@ -1246,45 +1247,35 @@ local function CollectItem(item)
     -- Сохраняем позицию
     local originalPosition = root.CFrame
     
-    -- Телепортируемся к объекту
+    -- Телепортируемся
     local targetPos = item.Position + Vector3.new(0, Config.TeleportRange, 0)
     root.CFrame = CFrame.new(targetPos)
     
-    task.wait(0.1)
+    StatusTitle.Text = "Статус: 📍 Телепорт к " .. item.Rarity
+    task.wait(0.2)
     
-    -- Пытаемся собрать через ProximityPrompt
+    StatusTitle.Text = "Статус: ⌨️ Удержание E..."
+    
+    -- Собираем через ProximityPrompt с удержанием
     local collected = false
     
     if item.Prompt then
-        -- Способ 1: fireproximityprompt
-        collected = FireProximityPrompt(item.Prompt)
-        task.wait(Config.CollectDelay)
+        -- Пробуем fireproximityprompt с удержанием
+        collected = FireProximityPromptWithHold(item.Prompt, Config.HoldDuration)
     end
     
-    -- Если не сработало, пробуем найти промпт рядом
+    -- Дополнительно зажимаем E через keypress
     if not collected then
-        for _, prompt in ipairs(Workspace:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                local promptPos = prompt.Parent and prompt.Parent:IsA("BasePart") and prompt.Parent.Position
-                if promptPos then
-                    local dist = (promptPos - item.Position).Magnitude
-                    if dist < 15 then
-                        FireProximityPrompt(prompt)
-                        task.wait(0.2)
-                        collected = true
-                        break
-                    end
-                end
-            end
-        end
+        HoldKeyE(Config.HoldDuration)
+        collected = true
     end
     
-    -- Дополнительно нажимаем E
-    PressE()
-    task.wait(0.1)
-    PressE()
+    -- Сброс прогресс бара
+    task.wait(0.3)
+    HoldProgressFill.Size = UDim2.new(0, 0, 1, 0)
+    HoldProgressText.Text = "⌨️ Удержание E: 0.0s"
     
-    -- Касаемся объекта
+    -- Касаемся объекта для надёжности
     if item.Object and item.Object:IsA("BasePart") then
         pcall(function()
             firetouchinterest(root, item.Object, 0)
@@ -1330,7 +1321,7 @@ StartButton.MouseButton1Click:Connect(function()
         StatusTitle.Text = "Статус: 🟢 Активен"
         StatusIcon.Text = "🟢"
         
-        Notify("Фарм запущен", "Сканирование началось", 2, "success")
+        Notify("Фарм запущен", "Удержание E: " .. Config.HoldDuration .. " сек", 2, "success")
     else
         StartButton.Text = "▶️ СТАРТ"
         StartButton.BackgroundColor3 = Theme.Success
@@ -1350,8 +1341,8 @@ spawn(function()
         task.wait(Config.ScanDelay)
         
         -- Обновляем статус
-        StatusInfo.Text = "Собрано: " .. Stats.Collected
-        StatusInfo2.Text = "🧠 " .. Stats.BrainrotsCollected .. " | 🎁 " .. Stats.LuckyBlocksCollected
+        StatusInfo.Text = string.format("Собрано: %d | 🧠 %d | 🎁 %d", 
+            Stats.Collected, Stats.BrainrotsCollected, Stats.LuckyBlocksCollected)
         
         if not Config.Farming then continue end
         
@@ -1359,10 +1350,9 @@ spawn(function()
         local root = GetRootPart()
         if not char or not root then continue end
         
-        -- Сохраняем позицию для возврата
         local returnPosition = root.CFrame
         
-        -- Ищем все предметы
+        -- Ищем предметы
         local items = FindAllCollectibles()
         
         if #items > 0 then
@@ -1373,11 +1363,7 @@ spawn(function()
         
         for _, item in ipairs(items) do
             if not Config.Farming then break end
-            
-            -- Проверяем что объект ещё существует
             if not item.Object or not item.Object.Parent then continue end
-            
-            StatusTitle.Text = "Статус: 📍 " .. item.Rarity .. " " .. item.Type
             
             if CollectItem(item) then
                 Stats.Collected = Stats.Collected + 1
@@ -1390,16 +1376,16 @@ spawn(function()
                 
                 Notify(
                     item.Rarity .. " " .. item.Type .. "!",
-                    "Успешно собран",
+                    "Собран за " .. Config.HoldDuration .. " сек",
                     2,
                     "collect"
                 )
             end
             
-            task.wait(0.2)
+            task.wait(0.3)
         end
         
-        -- Возвращаемся на позицию
+        -- Возврат
         if Config.TeleportBack and Config.SavedPosition then
             root.CFrame = Config.SavedPosition
         elseif Config.TeleportBack then
@@ -1414,30 +1400,19 @@ end)
 
 spawn(function()
     while ScreenGui.Parent do
-        task.wait(30)
+        task.wait(25)
         if Config.AntiAFK then
-            -- VirtualUser
             pcall(function()
                 local vu = game:GetService("VirtualUser")
                 vu:CaptureController()
                 vu:ClickButton2(Vector2.new())
             end)
             
-            -- Движение
             local hum = GetHumanoid()
             if hum then
                 hum:Move(Vector3.new(0, 0, 0))
                 hum.Jump = true
             end
-            
-            -- Нажатие клавиши
-            pcall(function()
-                if keypress then
-                    keypress(0x57) -- W
-                    task.wait(0.1)
-                    keyrelease(0x57)
-                end
-            end)
         end
     end
 end)
@@ -1457,7 +1432,6 @@ spawn(function()
     end
 end)
 
--- Пульсация
 spawn(function()
     while ScreenGui.Parent do
         if MiniButton.Visible then
@@ -1478,12 +1452,12 @@ TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back), {
 }):Play()
 
 task.delay(0.5, function()
-    Notify("Добро пожаловать!", "Brainrot Farm v2.0 - E Key Collection", 3, "success")
+    Notify("Добро пожаловать!", "E удерживается " .. Config.HoldDuration .. " сек", 3, "success")
 end)
 
 -- ═══════════════════════════════════════════════════════════════
 print("═══════════════════════════════════════════════════════════")
-print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v2.0")
-print("  ✅ Исправлен сбор через E (ProximityPrompt)")
+print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v2.1")
+print("  ✅ Удержание E: " .. Config.HoldDuration .. " секунд")
 print("  📱 Поддержка мобильных устройств")
 print("═══════════════════════════════════════════════════════════")
