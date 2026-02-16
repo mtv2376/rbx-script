@@ -1,8 +1,9 @@
+
 --[[
     ╔═══════════════════════════════════════════════════════════════╗
-    ║         ESCAPE TSUNAMI BRAINROT FARM v3.0                    ║
-    ║         Плавный полёт вместо телепорта                       ║
-    ║         Подъём → Полёт → Спуск → Сбор → Возврат              ║
+    ║         ESCAPE TSUNAMI BRAINROT FARM v4.0                    ║
+    ║         + АНТИКИЛЛ СИСТЕМА                                   ║
+    ║         God Mode + NoClip + Стабильный полёт                 ║
     ╚═══════════════════════════════════════════════════════════════╝
 ]]
 
@@ -36,10 +37,19 @@ local Config = {
     ScanDelay = 0.5,
     
     -- ПОЛЁТ
-    FlyHeight = 50,          -- Высота полёта
-    FlySpeed = 150,          -- Скорость горизонтального полёта
-    VerticalSpeed = 100,     -- Скорость подъёма/спуска
-    DescendSpeed = 200,      -- Скорость быстрого спуска
+    FlyHeight = 50,
+    FlySpeed = 150,
+    VerticalSpeed = 100,
+    DescendSpeed = 200,
+    
+    -- АНТИКИЛЛ СИСТЕМА
+    AntiKill = true,
+    GodMode = true,
+    NoClip = true,
+    AntiVoid = true,
+    AutoRespawn = true,
+    FreezeOnCollect = true,
+    SafeHeight = 100,
     
     SavedPosition = nil,
     
@@ -110,18 +120,24 @@ local LuckyBlockKeywords = {
 local Stats = {
     Collected = 0,
     BrainrotsCollected = 0,
-    LuckyBlocksCollected = 0
+    LuckyBlocksCollected = 0,
+    Deaths = 0,
+    Revives = 0
 }
 
 -- Состояние полёта
 local IsFlying = false
-local FlyConnection = nil
+local FlyBodyVelocity = nil
+local FlyBodyGyro = nil
+local AntiKillConnection = nil
+local NoClipConnection = nil
+local LastSafePosition = nil
 
 -- ═══════════════════════════════════════════════════════════════
 -- СОЗДАНИЕ GUI
 -- ═══════════════════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BrainrotFarm"
+ScreenGui.Name = "BrainrotFarmV4"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
@@ -154,7 +170,8 @@ local Theme = {
     TextDim = Color3.fromRGB(150, 140, 180),
     Success = Color3.fromRGB(80, 200, 100),
     Warning = Color3.fromRGB(255, 180, 50),
-    Error = Color3.fromRGB(255, 80, 80)
+    Error = Color3.fromRGB(255, 80, 80),
+    Shield = Color3.fromRGB(100, 200, 255)
 }
 
 -- ═══════════════════════════════════════════════════════════════
@@ -169,7 +186,8 @@ local function Notify(title, message, duration, notifType)
         warning = Theme.Warning,
         error = Theme.Error,
         collect = Color3.fromRGB(255, 215, 0),
-        fly = Color3.fromRGB(100, 200, 255)
+        fly = Color3.fromRGB(100, 200, 255),
+        shield = Theme.Shield
     }
     
     local icons = {
@@ -178,7 +196,8 @@ local function Notify(title, message, duration, notifType)
         warning = "⚠️",
         error = "❌",
         collect = "🎁",
-        fly = "✈️"
+        fly = "✈️",
+        shield = "🛡️"
     }
     
     local Notif = Instance.new("Frame")
@@ -245,7 +264,7 @@ end
 -- ═══════════════════════════════════════════════════════════════
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.9, 0) or UDim2.new(0, 480, 0, 700)
+MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.92, 0) or UDim2.new(0, 500, 0, 720)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Theme.Background
@@ -272,7 +291,7 @@ BGGradient.Parent = MainFrame
 -- HEADER
 -- ═══════════════════════════════════════════════════════════════
 local Header = Instance.new("Frame")
-Header.Size = UDim2.new(1, 0, 0, 60)
+Header.Size = UDim2.new(1, 0, 0, 58)
 Header.BackgroundColor3 = Theme.Card
 Header.BorderSizePixel = 0
 Header.Parent = MainFrame
@@ -286,54 +305,54 @@ HeaderGradient.Color = ColorSequence.new({
 HeaderGradient.Parent = Header
 
 local Logo = Instance.new("TextLabel")
-Logo.Size = UDim2.new(0, 50, 0, 50)
-Logo.Position = UDim2.new(0, 10, 0.5, -25)
+Logo.Size = UDim2.new(0, 48, 0, 48)
+Logo.Position = UDim2.new(0, 8, 0.5, -24)
 Logo.BackgroundTransparency = 1
 Logo.Text = "🧠"
-Logo.TextSize = 35
+Logo.TextSize = 32
 Logo.Parent = Header
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(0, 200, 0, 28)
-Title.Position = UDim2.new(0, 65, 0, 8)
+Title.Size = UDim2.new(0, 200, 0, 26)
+Title.Position = UDim2.new(0, 60, 0, 8)
 Title.BackgroundTransparency = 1
 Title.Text = "BRAINROT FARM"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 20
+Title.TextSize = 18
 Title.Font = Enum.Font.GothamBlack
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
 local Subtitle = Instance.new("TextLabel")
-Subtitle.Size = UDim2.new(0, 200, 0, 16)
-Subtitle.Position = UDim2.new(0, 65, 0, 36)
+Subtitle.Size = UDim2.new(0, 200, 0, 14)
+Subtitle.Position = UDim2.new(0, 60, 0, 34)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "v3.0 - Smooth Flight"
+Subtitle.Text = "v4.0 - AntiKill System"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 220)
-Subtitle.TextSize = 11
+Subtitle.TextSize = 10
 Subtitle.Font = Enum.Font.Gotham
 Subtitle.TextXAlignment = Enum.TextXAlignment.Left
 Subtitle.Parent = Header
 
 -- Кнопки
 local BtnContainer = Instance.new("Frame")
-BtnContainer.Size = UDim2.new(0, 90, 0, 40)
-BtnContainer.Position = UDim2.new(1, -100, 0.5, -20)
+BtnContainer.Size = UDim2.new(0, 85, 0, 38)
+BtnContainer.Position = UDim2.new(1, -95, 0.5, -19)
 BtnContainer.BackgroundTransparency = 1
 BtnContainer.Parent = Header
 
 local BtnLayout = Instance.new("UIListLayout")
 BtnLayout.FillDirection = Enum.FillDirection.Horizontal
-BtnLayout.Padding = UDim.new(0, 8)
+BtnLayout.Padding = UDim.new(0, 6)
 BtnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 BtnLayout.Parent = BtnContainer
 
 local function CreateHeaderBtn(icon, color, callback)
     local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(0, 38, 0, 38)
+    Btn.Size = UDim2.new(0, 36, 0, 36)
     Btn.BackgroundColor3 = color
     Btn.Text = icon
-    Btn.TextSize = 16
+    Btn.TextSize = 15
     Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     Btn.Font = Enum.Font.GothamBold
     Btn.Parent = BtnContainer
@@ -349,35 +368,35 @@ local CloseBtn = CreateHeaderBtn("✕", Color3.fromRGB(200, 60, 60), function() 
 -- СТАТУС ПАНЕЛЬ
 -- ═══════════════════════════════════════════════════════════════
 local StatusPanel = Instance.new("Frame")
-StatusPanel.Size = UDim2.new(1, -20, 0, 130)
-StatusPanel.Position = UDim2.new(0, 10, 0, 65)
+StatusPanel.Size = UDim2.new(1, -20, 0, 140)
+StatusPanel.Position = UDim2.new(0, 10, 0, 63)
 StatusPanel.BackgroundColor3 = Theme.Card
 StatusPanel.BorderSizePixel = 0
 StatusPanel.Parent = MainFrame
 Instance.new("UICorner", StatusPanel).CornerRadius = UDim.new(0, 12)
 
 local StatusIcon = Instance.new("TextLabel")
-StatusIcon.Size = UDim2.new(0, 50, 0, 50)
+StatusIcon.Size = UDim2.new(0, 45, 0, 45)
 StatusIcon.Position = UDim2.new(0, 10, 0, 10)
 StatusIcon.BackgroundTransparency = 1
 StatusIcon.Text = "⏸️"
-StatusIcon.TextSize = 30
+StatusIcon.TextSize = 28
 StatusIcon.Parent = StatusPanel
 
 local StatusTitle = Instance.new("TextLabel")
-StatusTitle.Size = UDim2.new(0.5, -70, 0, 20)
-StatusTitle.Position = UDim2.new(0, 65, 0, 10)
+StatusTitle.Size = UDim2.new(0.5, -65, 0, 18)
+StatusTitle.Position = UDim2.new(0, 60, 0, 10)
 StatusTitle.BackgroundTransparency = 1
 StatusTitle.Text = "Статус: Ожидание"
 StatusTitle.TextColor3 = Theme.Text
-StatusTitle.TextSize = 13
+StatusTitle.TextSize = 12
 StatusTitle.Font = Enum.Font.GothamBold
 StatusTitle.TextXAlignment = Enum.TextXAlignment.Left
 StatusTitle.Parent = StatusPanel
 
 local StatusInfo = Instance.new("TextLabel")
-StatusInfo.Size = UDim2.new(0.5, -70, 0, 18)
-StatusInfo.Position = UDim2.new(0, 65, 0, 32)
+StatusInfo.Size = UDim2.new(0.5, -65, 0, 16)
+StatusInfo.Position = UDim2.new(0, 60, 0, 30)
 StatusInfo.BackgroundTransparency = 1
 StatusInfo.Text = "Собрано: 0 | 🧠 0 | 🎁 0"
 StatusInfo.TextColor3 = Theme.TextDim
@@ -386,10 +405,9 @@ StatusInfo.Font = Enum.Font.Gotham
 StatusInfo.TextXAlignment = Enum.TextXAlignment.Left
 StatusInfo.Parent = StatusPanel
 
--- Статус полёта
 local FlyStatus = Instance.new("TextLabel")
-FlyStatus.Size = UDim2.new(0.5, -70, 0, 18)
-FlyStatus.Position = UDim2.new(0, 65, 0, 52)
+FlyStatus.Size = UDim2.new(0.5, -65, 0, 16)
+FlyStatus.Position = UDim2.new(0, 60, 0, 48)
 FlyStatus.BackgroundTransparency = 1
 FlyStatus.Text = "✈️ Полёт: Ожидание"
 FlyStatus.TextColor3 = Color3.fromRGB(100, 200, 255)
@@ -398,10 +416,22 @@ FlyStatus.Font = Enum.Font.Gotham
 FlyStatus.TextXAlignment = Enum.TextXAlignment.Left
 FlyStatus.Parent = StatusPanel
 
--- Прогресс бар для удержания E
+-- АНТИКИЛЛ СТАТУС
+local ShieldStatus = Instance.new("TextLabel")
+ShieldStatus.Size = UDim2.new(0.5, -65, 0, 16)
+ShieldStatus.Position = UDim2.new(0, 60, 0, 66)
+ShieldStatus.BackgroundTransparency = 1
+ShieldStatus.Text = "🛡️ Защита: Активна"
+ShieldStatus.TextColor3 = Theme.Shield
+ShieldStatus.TextSize = 10
+ShieldStatus.Font = Enum.Font.GothamBold
+ShieldStatus.TextXAlignment = Enum.TextXAlignment.Left
+ShieldStatus.Parent = StatusPanel
+
+-- Прогресс бар
 local HoldProgressBG = Instance.new("Frame")
-HoldProgressBG.Size = UDim2.new(0.55, -20, 0, 16)
-HoldProgressBG.Position = UDim2.new(0, 65, 0, 75)
+HoldProgressBG.Size = UDim2.new(0.5, -20, 0, 14)
+HoldProgressBG.Position = UDim2.new(0, 60, 0, 88)
 HoldProgressBG.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
 HoldProgressBG.BorderSizePixel = 0
 HoldProgressBG.Parent = StatusPanel
@@ -417,20 +447,20 @@ Instance.new("UICorner", HoldProgressFill).CornerRadius = UDim.new(1, 0)
 local HoldProgressText = Instance.new("TextLabel")
 HoldProgressText.Size = UDim2.new(1, 0, 1, 0)
 HoldProgressText.BackgroundTransparency = 1
-HoldProgressText.Text = "⌨️ Удержание E: —"
+HoldProgressText.Text = "⌨️ E: —"
 HoldProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
-HoldProgressText.TextSize = 9
+HoldProgressText.TextSize = 8
 HoldProgressText.Font = Enum.Font.GothamBold
 HoldProgressText.Parent = HoldProgressBG
 
 -- Кнопка Start/Stop
 local StartButton = Instance.new("TextButton")
-StartButton.Size = UDim2.new(0, 130, 0, 80)
-StartButton.Position = UDim2.new(1, -145, 0.5, -40)
+StartButton.Size = UDim2.new(0, 125, 0, 90)
+StartButton.Position = UDim2.new(1, -140, 0.5, -45)
 StartButton.BackgroundColor3 = Theme.Success
 StartButton.Text = "▶️ СТАРТ"
 StartButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-StartButton.TextSize = 16
+StartButton.TextSize = 15
 StartButton.Font = Enum.Font.GothamBold
 StartButton.Parent = StatusPanel
 Instance.new("UICorner", StartButton).CornerRadius = UDim.new(0, 12)
@@ -439,8 +469,8 @@ Instance.new("UICorner", StartButton).CornerRadius = UDim.new(0, 12)
 -- ТАБЫ
 -- ═══════════════════════════════════════════════════════════════
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, -20, 0, 42)
-TabContainer.Position = UDim2.new(0, 10, 0, 200)
+TabContainer.Size = UDim2.new(1, -20, 0, 40)
+TabContainer.Position = UDim2.new(0, 10, 0, 208)
 TabContainer.BackgroundColor3 = Theme.Card
 TabContainer.BorderSizePixel = 0
 TabContainer.Parent = MainFrame
@@ -455,7 +485,8 @@ TabLayout.Parent = TabContainer
 
 local Tabs = {
     {Name = "🧠", FullName = "Брейнроты"},
-    {Name = "🎁", FullName = "Лаки Блоки"},
+    {Name = "🎁", FullName = "Блоки"},
+    {Name = "🛡️", FullName = "АнтиКилл"},
     {Name = "✈️", FullName = "Полёт"},
     {Name = "⚙️", FullName = "Настройки"}
 }
@@ -465,19 +496,19 @@ local TabContents = {}
 local CurrentTab = 1
 
 local ContentContainer = Instance.new("Frame")
-ContentContainer.Size = UDim2.new(1, -20, 1, -260)
-ContentContainer.Position = UDim2.new(0, 10, 0, 248)
+ContentContainer.Size = UDim2.new(1, -20, 1, -265)
+ContentContainer.Position = UDim2.new(0, 10, 0, 253)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.ClipsDescendants = true
 ContentContainer.Parent = MainFrame
 
 for i, tab in ipairs(Tabs) do
     local TabBtn = Instance.new("TextButton")
-    TabBtn.Size = UDim2.new(0, IsMobile and 85 or 105, 0, 32)
+    TabBtn.Size = UDim2.new(0, IsMobile and 70 or 88, 0, 30)
     TabBtn.BackgroundColor3 = i == 1 and Theme.Primary or Color3.fromRGB(50, 45, 75)
-    TabBtn.Text = tab.Name .. " " .. tab.FullName
+    TabBtn.Text = IsMobile and tab.Name or (tab.Name .. " " .. tab.FullName)
     TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TabBtn.TextSize = IsMobile and 10 or 12
+    TabBtn.TextSize = IsMobile and 14 or 10
     TabBtn.Font = Enum.Font.GothamBold
     TabBtn.Parent = TabContainer
     Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 8)
@@ -494,7 +525,7 @@ for i, tab in ipairs(Tabs) do
     Content.Parent = ContentContainer
     
     local Layout = Instance.new("UIListLayout")
-    Layout.Padding = UDim.new(0, 7)
+    Layout.Padding = UDim.new(0, 6)
     Layout.Parent = Content
     
     Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -520,7 +551,7 @@ end
 
 local function CreateSection(parent, name, icon)
     local Section = Instance.new("Frame")
-    Section.Size = UDim2.new(1, 0, 0, 32)
+    Section.Size = UDim2.new(1, 0, 0, 30)
     Section.BackgroundColor3 = Theme.Primary
     Section.BorderSizePixel = 0
     Section.Parent = parent
@@ -538,14 +569,14 @@ local function CreateSection(parent, name, icon)
     Label.BackgroundTransparency = 1
     Label.Text = (icon or "") .. " " .. name
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = 13
+    Label.TextSize = 12
     Label.Font = Enum.Font.GothamBold
     Label.Parent = Section
 end
 
 local function CreateRarityToggle(parent, rarityName, configTable)
     local Toggle = Instance.new("Frame")
-    Toggle.Size = UDim2.new(1, 0, 0, 45)
+    Toggle.Size = UDim2.new(1, 0, 0, 42)
     Toggle.BackgroundColor3 = Theme.Card
     Toggle.BorderSizePixel = 0
     Toggle.Parent = parent
@@ -560,26 +591,26 @@ local function CreateRarityToggle(parent, rarityName, configTable)
     Instance.new("UICorner", RarityBadge).CornerRadius = UDim.new(0, 3)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.6, -25, 1, 0)
-    NameLabel.Position = UDim2.new(0, 22, 0, 0)
+    NameLabel.Size = UDim2.new(0.6, -20, 1, 0)
+    NameLabel.Position = UDim2.new(0, 20, 0, 0)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = rarityName
     NameLabel.TextColor3 = RarityColors[rarityName] or Theme.Text
-    NameLabel.TextSize = 13
+    NameLabel.TextSize = 12
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Toggle
     
     local SwitchBG = Instance.new("Frame")
-    SwitchBG.Size = UDim2.new(0, 48, 0, 24)
-    SwitchBG.Position = UDim2.new(1, -60, 0.5, -12)
+    SwitchBG.Size = UDim2.new(0, 45, 0, 22)
+    SwitchBG.Position = UDim2.new(1, -55, 0.5, -11)
     SwitchBG.BackgroundColor3 = configTable[rarityName] and Theme.Success or Color3.fromRGB(60, 60, 80)
     SwitchBG.Parent = Toggle
     Instance.new("UICorner", SwitchBG).CornerRadius = UDim.new(1, 0)
     
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 18, 0, 18)
-    Circle.Position = configTable[rarityName] and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = configTable[rarityName] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = SwitchBG
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
@@ -598,26 +629,26 @@ local function CreateRarityToggle(parent, rarityName, configTable)
             BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)
         }):Play()
         TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
-            Position = enabled and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+            Position = enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
         }):Play()
     end)
 end
 
-local function CreateToggle(parent, name, configKey, desc)
+local function CreateToggle(parent, name, configKey, desc, color)
     local Toggle = Instance.new("Frame")
-    Toggle.Size = UDim2.new(1, 0, 0, desc and 52 or 42)
+    Toggle.Size = UDim2.new(1, 0, 0, desc and 50 or 40)
     Toggle.BackgroundColor3 = Theme.Card
     Toggle.BorderSizePixel = 0
     Toggle.Parent = parent
     Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 10)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.65, 0, 0, 20)
-    NameLabel.Position = UDim2.new(0, 12, 0, desc and 8 or 11)
+    NameLabel.Size = UDim2.new(0.65, 0, 0, 18)
+    NameLabel.Position = UDim2.new(0, 12, 0, desc and 7 or 11)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = name
-    NameLabel.TextColor3 = Theme.Text
-    NameLabel.TextSize = 12
+    NameLabel.TextColor3 = color or Theme.Text
+    NameLabel.TextSize = 11
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Toggle
@@ -625,7 +656,7 @@ local function CreateToggle(parent, name, configKey, desc)
     if desc then
         local DescLabel = Instance.new("TextLabel")
         DescLabel.Size = UDim2.new(0.65, 0, 0, 14)
-        DescLabel.Position = UDim2.new(0, 12, 0, 28)
+        DescLabel.Position = UDim2.new(0, 12, 0, 26)
         DescLabel.BackgroundTransparency = 1
         DescLabel.Text = desc
         DescLabel.TextColor3 = Theme.TextDim
@@ -636,15 +667,15 @@ local function CreateToggle(parent, name, configKey, desc)
     end
     
     local SwitchBG = Instance.new("Frame")
-    SwitchBG.Size = UDim2.new(0, 48, 0, 24)
-    SwitchBG.Position = UDim2.new(1, -60, 0.5, -12)
+    SwitchBG.Size = UDim2.new(0, 45, 0, 22)
+    SwitchBG.Position = UDim2.new(1, -55, 0.5, -11)
     SwitchBG.BackgroundColor3 = Config[configKey] and Theme.Success or Color3.fromRGB(60, 60, 80)
     SwitchBG.Parent = Toggle
     Instance.new("UICorner", SwitchBG).CornerRadius = UDim.new(1, 0)
     
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 18, 0, 18)
-    Circle.Position = Config[configKey] and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.Position = Config[configKey] and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = SwitchBG
     Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
@@ -663,7 +694,7 @@ local function CreateToggle(parent, name, configKey, desc)
             BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)
         }):Play()
         TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
-            Position = enabled and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+            Position = enabled and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
         }):Play()
     end)
 end
@@ -672,26 +703,26 @@ local function CreateSlider(parent, name, configKey, min, max, step)
     step = step or 1
     
     local Slider = Instance.new("Frame")
-    Slider.Size = UDim2.new(1, 0, 0, 55)
+    Slider.Size = UDim2.new(1, 0, 0, 52)
     Slider.BackgroundColor3 = Theme.Card
     Slider.BorderSizePixel = 0
     Slider.Parent = parent
     Instance.new("UICorner", Slider).CornerRadius = UDim.new(0, 10)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.6, 0, 0, 20)
+    NameLabel.Size = UDim2.new(0.6, 0, 0, 18)
     NameLabel.Position = UDim2.new(0, 12, 0, 6)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = name
     NameLabel.TextColor3 = Theme.Text
-    NameLabel.TextSize = 11
+    NameLabel.TextSize = 10
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Slider
     
     local ValueBG = Instance.new("Frame")
-    ValueBG.Size = UDim2.new(0, 50, 0, 20)
-    ValueBG.Position = UDim2.new(1, -62, 0, 5)
+    ValueBG.Size = UDim2.new(0, 45, 0, 18)
+    ValueBG.Position = UDim2.new(1, -55, 0, 5)
     ValueBG.BackgroundColor3 = Theme.Primary
     ValueBG.Parent = Slider
     Instance.new("UICorner", ValueBG).CornerRadius = UDim.new(0, 5)
@@ -701,13 +732,13 @@ local function CreateSlider(parent, name, configKey, min, max, step)
     ValueLabel.BackgroundTransparency = 1
     ValueLabel.Text = tostring(Config[configKey])
     ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ValueLabel.TextSize = 10
+    ValueLabel.TextSize = 9
     ValueLabel.Font = Enum.Font.GothamBold
     ValueLabel.Parent = ValueBG
     
     local SliderBar = Instance.new("Frame")
     SliderBar.Size = UDim2.new(1, -24, 0, 8)
-    SliderBar.Position = UDim2.new(0, 12, 0, 38)
+    SliderBar.Position = UDim2.new(0, 12, 0, 35)
     SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
     SliderBar.Parent = Slider
     Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(1, 0)
@@ -760,27 +791,27 @@ end
 
 local function CreateButton(parent, name, icon, color, callback)
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(1, 0, 0, 42)
+    Button.Size = UDim2.new(1, 0, 0, 40)
     Button.BackgroundColor3 = color or Theme.Primary
     Button.Text = ""
     Button.Parent = parent
     Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 10)
     
     local Icon = Instance.new("TextLabel")
-    Icon.Size = UDim2.new(0, 35, 1, 0)
+    Icon.Size = UDim2.new(0, 32, 1, 0)
     Icon.Position = UDim2.new(0, 8, 0, 0)
     Icon.BackgroundTransparency = 1
     Icon.Text = icon or ""
-    Icon.TextSize = 18
+    Icon.TextSize = 16
     Icon.Parent = Button
     
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -50, 1, 0)
-    Label.Position = UDim2.new(0, 45, 0, 0)
+    Label.Size = UDim2.new(1, -45, 1, 0)
+    Label.Position = UDim2.new(0, 42, 0, 0)
     Label.BackgroundTransparency = 1
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.TextSize = 12
+    Label.TextSize = 11
     Label.Font = Enum.Font.GothamBold
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Button
@@ -815,11 +846,6 @@ CreateButton(TabContents[1], "Только редкие+", "💎", Color3.fromRG
     Notify("Брейнроты", "Rare+ выбраны", 2, "success")
 end)
 
-CreateButton(TabContents[1], "Снять все", "❌", Theme.Error, function()
-    for _, r in ipairs(rarities) do Config.Brainrots[r] = false end
-    Notify("Брейнроты", "Все сняты", 2, "info")
-end)
-
 -- ТАБ 2: ЛАКИ БЛОКИ
 CreateSection(TabContents[2], "РЕДКОСТИ", "🎁")
 
@@ -841,76 +867,75 @@ CreateButton(TabContents[2], "Только редкие+", "💎", Color3.fromRG
     Notify("Лаки блоки", "Rare+ выбраны", 2, "success")
 end)
 
-CreateButton(TabContents[2], "Снять все", "❌", Theme.Error, function()
-    for _, r in ipairs(rarities) do Config.LuckyBlocks[r] = false end
-    Notify("Лаки блоки", "Все сняты", 2, "info")
-end)
+-- ТАБ 3: АНТИКИЛЛ
+CreateSection(TabContents[3], "🛡️ ГЛАВНАЯ ЗАЩИТА", "🛡️")
+CreateToggle(TabContents[3], "🛡️ АнтиКилл система", "AntiKill", "Полная защита от смерти", Theme.Shield)
+CreateToggle(TabContents[3], "❤️ Бессмертие (God Mode)", "GodMode", "Бесконечное здоровье", Color3.fromRGB(255, 100, 100))
+CreateToggle(TabContents[3], "👻 NoClip", "NoClip", "Проход сквозь стены", Color3.fromRGB(150, 150, 255))
+CreateToggle(TabContents[3], "🕳️ Анти-Войд", "AntiVoid", "Защита от падения", Color3.fromRGB(255, 150, 100))
+CreateToggle(TabContents[3], "🔄 Авто-Респавн", "AutoRespawn", "Автоматическое возрождение", Color3.fromRGB(100, 255, 150))
+CreateToggle(TabContents[3], "🧊 Заморозка при сборе", "FreezeOnCollect", "Стабилизация при сборе", Color3.fromRGB(150, 220, 255))
 
--- ТАБ 3: ПОЛЁТ
-CreateSection(TabContents[3], "НАСТРОЙКИ ПОЛЁТА", "✈️")
-CreateSlider(TabContents[3], "Высота полёта (studs)", "FlyHeight", 20, 150, 10)
-CreateSlider(TabContents[3], "Скорость полёта", "FlySpeed", 50, 300, 10)
-CreateSlider(TabContents[3], "Скорость подъёма", "VerticalSpeed", 50, 200, 10)
-CreateSlider(TabContents[3], "Скорость спуска", "DescendSpeed", 100, 400, 20)
+CreateSection(TabContents[3], "⚙️ НАСТРОЙКИ БЕЗОПАСНОСТИ", "⚙️")
+CreateSlider(TabContents[3], "Безопасная высота", "SafeHeight", 50, 200, 10)
 
-CreateSection(TabContents[3], "УДЕРЖАНИЕ E", "⌨️")
-CreateSlider(TabContents[3], "Время удержания (сек)", "HoldDuration", 1, 6, 0.5)
+CreateSection(TabContents[3], "📊 СТАТИСТИКА ЗАЩИТЫ", "📊")
 
-CreateSection(TabContents[3], "ОПИСАНИЕ", "📖")
+local ProtectStats = Instance.new("Frame")
+ProtectStats.Size = UDim2.new(1, 0, 0, 70)
+ProtectStats.BackgroundColor3 = Theme.Card
+ProtectStats.Parent = TabContents[3]
+Instance.new("UICorner", ProtectStats).CornerRadius = UDim.new(0, 10)
 
-local DescFrame = Instance.new("Frame")
-DescFrame.Size = UDim2.new(1, 0, 0, 100)
-DescFrame.BackgroundColor3 = Theme.Card
-DescFrame.Parent = TabContents[3]
-Instance.new("UICorner", DescFrame).CornerRadius = UDim.new(0, 10)
+local ProtectText = Instance.new("TextLabel")
+ProtectText.Name = "ProtectText"
+ProtectText.Size = UDim2.new(1, -20, 1, -10)
+ProtectText.Position = UDim2.new(0, 10, 0, 5)
+ProtectText.BackgroundTransparency = 1
+ProtectText.Text = "💀 Смертей предотвращено: 0\n🔄 Авто-воскрешений: 0\n🛡️ Статус: Ожидание"
+ProtectText.TextColor3 = Theme.TextDim
+ProtectText.TextSize = 11
+ProtectText.Font = Enum.Font.Gotham
+ProtectText.TextXAlignment = Enum.TextXAlignment.Left
+ProtectText.TextYAlignment = Enum.TextYAlignment.Center
+ProtectText.Parent = ProtectStats
 
-local DescText = Instance.new("TextLabel")
-DescText.Size = UDim2.new(1, -20, 1, -10)
-DescText.Position = UDim2.new(0, 10, 0, 5)
-DescText.BackgroundTransparency = 1
-DescText.Text = "🛫 Персонаж ПОДНИМАЕТСЯ вверх\n✈️ Летит ГОРИЗОНТАЛЬНО к цели\n🛬 БЫСТРО ОПУСКАЕТСЯ к предмету\n⌨️ Зажимает E на время сбора\n🔄 Возвращается тем же путём"
-DescText.TextColor3 = Theme.TextDim
-DescText.TextSize = 11
-DescText.Font = Enum.Font.Gotham
-DescText.TextXAlignment = Enum.TextXAlignment.Left
-DescText.TextYAlignment = Enum.TextYAlignment.Top
-DescText.TextWrapped = true
-DescText.Parent = DescFrame
+-- ТАБ 4: ПОЛЁТ
+CreateSection(TabContents[4], "НАСТРОЙКИ ПОЛЁТА", "✈️")
+CreateSlider(TabContents[4], "Высота полёта", "FlyHeight", 20, 150, 10)
+CreateSlider(TabContents[4], "Скорость полёта", "FlySpeed", 50, 300, 10)
+CreateSlider(TabContents[4], "Скорость подъёма", "VerticalSpeed", 50, 200, 10)
+CreateSlider(TabContents[4], "Скорость спуска", "DescendSpeed", 100, 400, 20)
 
--- ТАБ 4: НАСТРОЙКИ
-CreateSection(TabContents[4], "ОСНОВНЫЕ", "⚙️")
-CreateToggle(TabContents[4], "Анти-АФК", "AntiAFK", "Не кикает за бездействие")
-CreateToggle(TabContents[4], "Авто-сбор", "AutoCollect", "Автоматически собирать")
-CreateToggle(TabContents[4], "Возврат на базу", "TeleportBack", "Возвращаться после сбора")
+CreateSection(TabContents[4], "УДЕРЖАНИЕ E", "⌨️")
+CreateSlider(TabContents[4], "Время удержания (сек)", "HoldDuration", 1, 6, 0.5)
 
-CreateSection(TabContents[4], "ТАЙМИНГИ", "⏱️")
-CreateSlider(TabContents[4], "Задержка после сбора (сек)", "CollectDelay", 0.1, 2, 0.1)
-CreateSlider(TabContents[4], "Частота сканирования (сек)", "ScanDelay", 0.2, 2, 0.1)
+-- ТАБ 5: НАСТРОЙКИ
+CreateSection(TabContents[5], "ОСНОВНЫЕ", "⚙️")
+CreateToggle(TabContents[5], "Анти-АФК", "AntiAFK", "Не кикает за бездействие")
+CreateToggle(TabContents[5], "Авто-сбор", "AutoCollect", "Автоматически собирать")
+CreateToggle(TabContents[5], "Возврат на базу", "TeleportBack", "Возвращаться после сбора")
 
-CreateSection(TabContents[4], "ДЕЙСТВИЯ", "⚡")
+CreateSection(TabContents[5], "ТАЙМИНГИ", "⏱️")
+CreateSlider(TabContents[5], "Задержка после сбора", "CollectDelay", 0.1, 2, 0.1)
+CreateSlider(TabContents[5], "Частота сканирования", "ScanDelay", 0.2, 2, 0.1)
 
-CreateButton(TabContents[4], "Сохранить позицию базы", "📍", Color3.fromRGB(80, 150, 200), function()
+CreateSection(TabContents[5], "ДЕЙСТВИЯ", "⚡")
+
+CreateButton(TabContents[5], "Сохранить базу", "📍", Color3.fromRGB(80, 150, 200), function()
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if root then
         Config.SavedPosition = root.CFrame
+        LastSafePosition = root.CFrame
         Notify("База", "Позиция сохранена", 2, "success")
     end
 end)
 
-CreateButton(TabContents[4], "Телепорт на базу", "🏠", Color3.fromRGB(100, 180, 100), function()
+CreateButton(TabContents[5], "Телепорт на базу", "🏠", Color3.fromRGB(100, 180, 100), function()
     if Config.SavedPosition then
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if root then root.CFrame = Config.SavedPosition end
-    else
-        Notify("Ошибка", "Сначала сохраните базу", 2, "error")
     end
-end)
-
-CreateButton(TabContents[4], "Сбросить статистику", "🔄", Color3.fromRGB(100, 100, 150), function()
-    Stats.Collected = 0
-    Stats.BrainrotsCollected = 0
-    Stats.LuckyBlocksCollected = 0
-    Notify("Статистика", "Сброшена", 2, "info")
 end)
 
 -- ═══════════════════════════════════════════════════════════════
@@ -931,7 +956,6 @@ MiniStroke.Color = Theme.Primary
 MiniStroke.Thickness = 3
 MiniStroke.Parent = MiniButton
 
--- Перетаскивание
 local dragMini = false
 local dragStartMini, startPosMini
 
@@ -964,10 +988,10 @@ end)
 
 CloseBtn.MouseButton1Click:Connect(function()
     Config.Farming = false
+    StopAntiKill()
     ScreenGui:Destroy()
 end)
 
--- Перетаскивание главного окна
 local dragMain = false
 local dragStartMain, startPosMain
 
@@ -1007,103 +1031,325 @@ local function GetHumanoid()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- СИСТЕМА ПЛАВНОГО ПОЛЁТА
+-- 🛡️ АНТИКИЛЛ СИСТЕМА
 -- ═══════════════════════════════════════════════════════════════
 
--- Плавное перемещение к позиции
-local function SmoothMoveTo(targetPosition, speed, updateStatus)
+local function EnableGodMode()
+    local char = GetCharacter()
+    local hum = GetHumanoid()
+    if not char or not hum then return end
+    
+    -- Бесконечное здоровье
+    hum.Health = hum.MaxHealth
+    
+    -- Отключаем состояния смерти
+    pcall(function()
+        hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    end)
+end
+
+local function EnableNoClip()
+    local char = GetCharacter()
+    if not char then return end
+    
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+end
+
+local function DisableNoClip()
+    local char = GetCharacter()
+    if not char then return end
+    
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.CanCollide = true
+        end
+    end
+end
+
+local function CheckAntiVoid()
+    local root = GetRootPart()
+    if not root then return end
+    
+    if root.Position.Y < -50 then
+        if LastSafePosition then
+            root.CFrame = LastSafePosition
+        elseif Config.SavedPosition then
+            root.CFrame = Config.SavedPosition
+        else
+            root.CFrame = CFrame.new(0, Config.SafeHeight, 0)
+        end
+        Stats.Revives = Stats.Revives + 1
+        Notify("🛡️ Анти-Войд", "Спасён от падения!", 2, "shield")
+    end
+end
+
+local function SaveSafePosition()
+    local root = GetRootPart()
+    if root and root.Position.Y > 0 then
+        LastSafePosition = root.CFrame
+    end
+end
+
+local function StartAntiKill()
+    if AntiKillConnection then return end
+    
+    AntiKillConnection = RunService.Heartbeat:Connect(function()
+        if not Config.AntiKill then return end
+        
+        local char = GetCharacter()
+        local hum = GetHumanoid()
+        local root = GetRootPart()
+        
+        if not char or not hum or not root then return end
+        
+        -- God Mode
+        if Config.GodMode then
+            EnableGodMode()
+        end
+        
+        -- NoClip
+        if Config.NoClip then
+            EnableNoClip()
+        end
+        
+        -- Anti-Void
+        if Config.AntiVoid then
+            CheckAntiVoid()
+        end
+        
+        -- Сохраняем безопасную позицию
+        if not IsFlying and root.Position.Y > 10 then
+            SaveSafePosition()
+        end
+        
+        -- Обновляем статус
+        local protectText = ProtectStats:FindFirstChild("ProtectText")
+        if protectText then
+            protectText.Text = string.format(
+                "💀 Смертей предотвращено: %d\n🔄 Авто-воскрешений: %d\n🛡️ Статус: %s",
+                Stats.Deaths,
+                Stats.Revives,
+                Config.AntiKill and "✅ Активна" or "❌ Отключена"
+            )
+        end
+        
+        ShieldStatus.Text = Config.AntiKill and "🛡️ Защита: ✅ Активна" or "🛡️ Защита: ❌ Отключена"
+    end)
+    
+    -- Отслеживание смерти для авто-респавна
+    local char = GetCharacter()
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Died:Connect(function()
+                Stats.Deaths = Stats.Deaths + 1
+                if Config.AutoRespawn then
+                    task.wait(0.5)
+                    -- Принудительный респавн
+                    LocalPlayer:LoadCharacter()
+                    Stats.Revives = Stats.Revives + 1
+                    Notify("🔄 Авто-респавн", "Возрождение...", 2, "shield")
+                end
+            end)
+        end
+    end
+end
+
+local function StopAntiKill()
+    if AntiKillConnection then
+        AntiKillConnection:Disconnect()
+        AntiKillConnection = nil
+    end
+    
+    DisableNoClip()
+end
+
+-- Авто-респавн отслеживание
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    
+    if Config.AntiKill then
+        StartAntiKill()
+    end
+    
+    -- Восстанавливаем защиту
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum and Config.GodMode then
+        EnableGodMode()
+    end
+    
+    -- Отслеживаем смерть нового персонажа
+    if hum then
+        hum.Died:Connect(function()
+            Stats.Deaths = Stats.Deaths + 1
+            if Config.AutoRespawn then
+                task.wait(0.5)
+                pcall(function()
+                    LocalPlayer:LoadCharacter()
+                end)
+                Stats.Revives = Stats.Revives + 1
+            end
+        end)
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+-- СТАБИЛЬНЫЙ ПОЛЁТ С BODYMOVERS
+-- ═══════════════════════════════════════════════════════════════
+
+local function CreateFlyBody()
+    local root = GetRootPart()
+    local hum = GetHumanoid()
+    if not root or not hum then return false end
+    
+    -- Удаляем старые
+    if FlyBodyVelocity then FlyBodyVelocity:Destroy() end
+    if FlyBodyGyro then FlyBodyGyro:Destroy() end
+    
+    -- BodyVelocity для движения
+    FlyBodyVelocity = Instance.new("BodyVelocity")
+    FlyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyVelocity.Velocity = Vector3.zero
+    FlyBodyVelocity.Parent = root
+    
+    -- BodyGyro для стабилизации вращения
+    FlyBodyGyro = Instance.new("BodyGyro")
+    FlyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    FlyBodyGyro.P = 9e4
+    FlyBodyGyro.D = 1000
+    FlyBodyGyro.CFrame = root.CFrame
+    FlyBodyGyro.Parent = root
+    
+    -- Отключаем физику гуманоида
+    hum.PlatformStand = true
+    
+    IsFlying = true
+    return true
+end
+
+local function DestroyFlyBody()
+    if FlyBodyVelocity then
+        FlyBodyVelocity:Destroy()
+        FlyBodyVelocity = nil
+    end
+    if FlyBodyGyro then
+        FlyBodyGyro:Destroy()
+        FlyBodyGyro = nil
+    end
+    
+    local hum = GetHumanoid()
+    if hum then
+        hum.PlatformStand = false
+    end
+    
+    IsFlying = false
+end
+
+local function StableFlyTo(targetPosition, speed)
     local root = GetRootPart()
     if not root then return false end
+    
+    if not FlyBodyVelocity or not FlyBodyGyro then
+        if not CreateFlyBody() then return false end
+    end
     
     local startPos = root.Position
     local direction = (targetPosition - startPos)
     local distance = direction.Magnitude
     
-    if distance < 1 then return true end
+    if distance < 2 then return true end
     
     direction = direction.Unit
-    local duration = distance / speed
-    local startTime = tick()
     
-    while tick() - startTime < duration do
-        if not Config.Farming then return false end
-        
+    while Config.Farming do
         root = GetRootPart()
-        if not root then return false end
+        if not root or not FlyBodyVelocity then return false end
         
-        local elapsed = tick() - startTime
-        local progress = math.min(elapsed / duration, 1)
+        local currentPos = root.Position
+        local remaining = (targetPosition - currentPos)
+        local dist = remaining.Magnitude
         
-        -- Плавное движение с easing
-        local easedProgress = 1 - math.pow(1 - progress, 2)
-        local newPos = startPos:Lerp(targetPosition, easedProgress)
+        if dist < 3 then break end
         
-        root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, root.CFrame:ToEulerAnglesYXZ())
+        -- Плавное торможение при приближении
+        local actualSpeed = math.min(speed, dist * 2)
         
-        if updateStatus then
-            updateStatus(progress)
+        FlyBodyVelocity.Velocity = remaining.Unit * actualSpeed
+        FlyBodyGyro.CFrame = CFrame.lookAt(currentPos, targetPosition)
+        
+        -- God Mode во время полёта
+        if Config.GodMode then
+            EnableGodMode()
+        end
+        
+        -- NoClip во время полёта
+        if Config.NoClip then
+            EnableNoClip()
         end
         
         RunService.Heartbeat:Wait()
     end
     
-    -- Финальная позиция
+    -- Останавливаемся
+    if FlyBodyVelocity then
+        FlyBodyVelocity.Velocity = Vector3.zero
+    end
+    
+    -- Точная позиция
     root = GetRootPart()
     if root then
-        root.CFrame = CFrame.new(targetPosition) * CFrame.Angles(0, root.CFrame:ToEulerAnglesYXZ())
+        root.CFrame = CFrame.new(targetPosition)
     end
     
     return true
 end
 
--- Подъём вверх
-local function FlyUp(targetHeight)
+local function FreezePosition()
     local root = GetRootPart()
-    if not root then return false end
+    if not root then return end
     
-    local startPos = root.Position
-    local targetPos = Vector3.new(startPos.X, targetHeight, startPos.Z)
+    if FlyBodyVelocity then
+        FlyBodyVelocity.Velocity = Vector3.zero
+    end
     
-    FlyStatus.Text = "✈️ Полёт: 🛫 Взлёт..."
+    -- Создаём временную заморозку
+    local freezePos = root.Position
+    local freezeConnection
     
-    return SmoothMoveTo(targetPos, Config.VerticalSpeed, function(progress)
-        FlyStatus.Text = string.format("✈️ Полёт: 🛫 Взлёт %.0f%%", progress * 100)
+    freezeConnection = RunService.Heartbeat:Connect(function()
+        root = GetRootPart()
+        if root then
+            root.CFrame = CFrame.new(freezePos) * CFrame.Angles(0, root.CFrame:ToEulerAnglesYXZ())
+        end
     end)
+    
+    return function()
+        if freezeConnection then
+            freezeConnection:Disconnect()
+        end
+    end
 end
 
--- Горизонтальный полёт
-local function FlyHorizontal(targetX, targetZ, currentHeight)
-    local root = GetRootPart()
-    if not root then return false end
-    
-    local targetPos = Vector3.new(targetX, currentHeight, targetZ)
-    
-    FlyStatus.Text = "✈️ Полёт: ✈️ В пути..."
-    
-    return SmoothMoveTo(targetPos, Config.FlySpeed, function(progress)
-        FlyStatus.Text = string.format("✈️ Полёт: ✈️ В пути %.0f%%", progress * 100)
-    end)
-end
+-- ═══════════════════════════════════════════════════════════════
+-- ПЛАВНЫЙ ПОЛЁТ К ЦЕЛИ
+-- ═══════════════════════════════════════════════════════════════
 
--- Быстрый спуск
-local function FlyDown(targetY)
+local function FlyToCollect(targetPosition, originalPosition)
     local root = GetRootPart()
     if not root then return false end
     
-    local startPos = root.Position
-    local targetPos = Vector3.new(startPos.X, targetY, startPos.Z)
+    -- Включаем защиту
+    if Config.NoClip then EnableNoClip() end
+    if Config.GodMode then EnableGodMode() end
     
-    FlyStatus.Text = "✈️ Полёт: 🛬 Спуск..."
-    
-    return SmoothMoveTo(targetPos, Config.DescendSpeed, function(progress)
-        FlyStatus.Text = string.format("✈️ Полёт: 🛬 Спуск %.0f%%", progress * 100)
-    end)
-end
-
--- Полный цикл полёта к цели и обратно
-local function FlyToTargetAndBack(targetPosition, originalPosition)
-    local root = GetRootPart()
-    if not root then return false end
+    -- Создаём fly body
+    if not CreateFlyBody() then return false end
     
     local startPos = root.Position
     local flyHeight = math.max(startPos.Y, targetPosition.Y) + Config.FlyHeight
@@ -1112,17 +1358,29 @@ local function FlyToTargetAndBack(targetPosition, originalPosition)
     
     -- 1. Взлёт
     FlyStatus.Text = "✈️ Полёт: 🛫 Взлёт..."
-    if not FlyUp(flyHeight) then return false end
+    local upTarget = Vector3.new(startPos.X, flyHeight, startPos.Z)
+    if not StableFlyTo(upTarget, Config.VerticalSpeed) then
+        DestroyFlyBody()
+        return false
+    end
     task.wait(0.1)
     
-    -- 2. Горизонтальный полёт к цели
+    -- 2. Горизонтальный полёт
     FlyStatus.Text = "✈️ Полёт: ✈️ К цели..."
-    if not FlyHorizontal(targetPosition.X, targetPosition.Z, flyHeight) then return false end
+    local flyTarget = Vector3.new(targetPosition.X, flyHeight, targetPosition.Z)
+    if not StableFlyTo(flyTarget, Config.FlySpeed) then
+        DestroyFlyBody()
+        return false
+    end
     task.wait(0.1)
     
-    -- 3. Быстрый спуск к предмету
-    FlyStatus.Text = "✈️ Полёт: 🛬 Спуск к цели..."
-    if not FlyDown(targetPosition.Y + 3) then return false end
+    -- 3. Спуск
+    FlyStatus.Text = "✈️ Полёт: 🛬 Спуск..."
+    local downTarget = Vector3.new(targetPosition.X, targetPosition.Y + 3, targetPosition.Z)
+    if not StableFlyTo(downTarget, Config.DescendSpeed) then
+        DestroyFlyBody()
+        return false
+    end
     
     return true
 end
@@ -1136,19 +1394,33 @@ local function FlyBackToBase(originalPosition)
     
     -- ═══ ПУТЬ НАЗАД ═══
     
-    -- 1. Взлёт от места сбора
-    FlyStatus.Text = "✈️ Полёт: 🛫 Взлёт (возврат)..."
-    if not FlyUp(flyHeight) then return false end
+    -- 1. Взлёт
+    FlyStatus.Text = "✈️ Полёт: 🛫 Возврат..."
+    local upTarget = Vector3.new(currentPos.X, flyHeight, currentPos.Z)
+    if not StableFlyTo(upTarget, Config.VerticalSpeed) then
+        DestroyFlyBody()
+        return false
+    end
     task.wait(0.1)
     
     -- 2. Горизонтальный полёт к базе
     FlyStatus.Text = "✈️ Полёт: ✈️ К базе..."
-    if not FlyHorizontal(originalPosition.X, originalPosition.Z, flyHeight) then return false end
+    local flyTarget = Vector3.new(originalPosition.X, flyHeight, originalPosition.Z)
+    if not StableFlyTo(flyTarget, Config.FlySpeed) then
+        DestroyFlyBody()
+        return false
+    end
     task.wait(0.1)
     
     -- 3. Спуск на базу
     FlyStatus.Text = "✈️ Полёт: 🛬 Посадка..."
-    if not FlyDown(originalPosition.Y) then return false end
+    if not StableFlyTo(originalPosition, Config.DescendSpeed) then
+        DestroyFlyBody()
+        return false
+    end
+    
+    -- Выключаем полёт
+    DestroyFlyBody()
     
     FlyStatus.Text = "✈️ Полёт: ✅ На базе"
     
@@ -1163,6 +1435,12 @@ local function HoldKeyE(duration)
     duration = duration or Config.HoldDuration
     
     local startTime = tick()
+    local unfreezeFunc = nil
+    
+    -- Замораживаем позицию при сборе
+    if Config.FreezeOnCollect then
+        unfreezeFunc = FreezePosition()
+    end
     
     -- Начинаем удержание
     if keypress then
@@ -1181,7 +1459,10 @@ local function HoldKeyE(duration)
         local progress = elapsed / duration
         
         HoldProgressFill.Size = UDim2.new(progress, 0, 1, 0)
-        HoldProgressText.Text = string.format("⌨️ E: %.1fs / %.1fs", elapsed, duration)
+        HoldProgressText.Text = string.format("⌨️ E: %.1fs", elapsed)
+        
+        -- Поддерживаем защиту
+        if Config.GodMode then EnableGodMode() end
         
         task.wait(0.05)
     end
@@ -1195,12 +1476,17 @@ local function HoldKeyE(duration)
         end)
     end
     
+    -- Размораживаем
+    if unfreezeFunc then
+        unfreezeFunc()
+    end
+    
     HoldProgressFill.Size = UDim2.new(1, 0, 1, 0)
     HoldProgressText.Text = "✅ Собрано!"
     
-    task.wait(0.3)
+    task.wait(0.2)
     HoldProgressFill.Size = UDim2.new(0, 0, 1, 0)
-    HoldProgressText.Text = "⌨️ Удержание E: —"
+    HoldProgressText.Text = "⌨️ E: —"
     
     return true
 end
@@ -1304,28 +1590,28 @@ local function FindAllCollectibles()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- СБОР ПРЕДМЕТА С ПОЛЁТОМ
+-- СБОР ПРЕДМЕТА
 -- ═══════════════════════════════════════════════════════════════
 
 local function CollectItemWithFlight(item)
     local root = GetRootPart()
     if not root then return false end
     
-    -- Сохраняем стартовую позицию (база)
     local basePosition = Config.SavedPosition and Config.SavedPosition.Position or root.Position
     
     StatusTitle.Text = "Статус: ✈️ Летим к " .. item.Rarity
     
     -- Летим к цели
-    if not FlyToTargetAndBack(item.Position, basePosition) then
+    if not FlyToCollect(item.Position, basePosition) then
+        DestroyFlyBody()
         return false
     end
     
-    -- Собираем (удержание E)
+    -- Собираем
     StatusTitle.Text = "Статус: ⌨️ Сбор..."
-    FlyStatus.Text = "✈️ Полёт: 📦 Сбор предмета"
+    FlyStatus.Text = "✈️ Полёт: 📦 Сбор"
     
-    -- Активируем ProximityPrompt если есть
+    -- Активируем ProximityPrompt
     if item.Prompt then
         if fireproximityprompt then
             pcall(function() fireproximityprompt(item.Prompt, Config.HoldDuration) end)
@@ -1351,16 +1637,19 @@ local function CollectItemWithFlight(item)
     
     task.wait(Config.CollectDelay)
     
-    -- Возвращаемся на базу
+    -- Возвращаемся
     if Config.TeleportBack then
         StatusTitle.Text = "Статус: ✈️ Возвращаемся"
         if not FlyBackToBase(basePosition) then
-            -- Если не получилось плавно - телепортируемся
+            DestroyFlyBody()
+            -- Аварийный телепорт
             root = GetRootPart()
             if root then
                 root.CFrame = CFrame.new(basePosition)
             end
         end
+    else
+        DestroyFlyBody()
     end
     
     return true
@@ -1377,7 +1666,13 @@ StartButton.MouseButton1Click:Connect(function()
         local root = GetRootPart()
         if root and not Config.SavedPosition then
             Config.SavedPosition = root.CFrame
+            LastSafePosition = root.CFrame
             Notify("База", "Позиция автоматически сохранена", 2, "info")
+        end
+        
+        -- Запускаем АнтиКилл
+        if Config.AntiKill then
+            StartAntiKill()
         end
         
         StartButton.Text = "⏹️ СТОП"
@@ -1385,13 +1680,16 @@ StartButton.MouseButton1Click:Connect(function()
         StatusTitle.Text = "Статус: 🟢 Активен"
         StatusIcon.Text = "🟢"
         
-        Notify("Фарм запущен", "Плавный полёт активирован", 2, "success")
+        Notify("Фарм запущен", "🛡️ АнтиКилл активирован", 2, "success")
     else
         StartButton.Text = "▶️ СТАРТ"
         StartButton.BackgroundColor3 = Theme.Success
         StatusTitle.Text = "Статус: ⏸️ Остановлен"
         StatusIcon.Text = "⏸️"
         FlyStatus.Text = "✈️ Полёт: Остановлен"
+        
+        -- Выключаем полёт
+        DestroyFlyBody()
         
         Notify("Фарм остановлен", "Собрано: " .. Stats.Collected, 2, "info")
     end
@@ -1422,7 +1720,6 @@ spawn(function()
         
         if #items > 0 then
             StatusTitle.Text = "Статус: 🔍 Найдено: " .. #items
-            FlyStatus.Text = "✈️ Полёт: Готов к вылету"
         else
             StatusTitle.Text = "Статус: 🟢 Сканирование..."
             FlyStatus.Text = "✈️ Полёт: Поиск целей"
@@ -1443,13 +1740,13 @@ spawn(function()
                 
                 Notify(
                     item.Rarity .. " " .. item.Type .. "!",
-                    "Успешно собран",
+                    "🛡️ Защищённый сбор",
                     2,
                     "collect"
                 )
             end
             
-            task.wait(0.5)
+            task.wait(0.3)
         end
     end
 end)
@@ -1467,11 +1764,6 @@ spawn(function()
                 vu:CaptureController()
                 vu:ClickButton2(Vector2.new())
             end)
-            
-            local hum = GetHumanoid()
-            if hum and not Config.Farming then
-                hum:Move(Vector3.new(0, 0, 0))
-            end
         end
     end
 end)
@@ -1491,32 +1783,23 @@ spawn(function()
     end
 end)
 
-spawn(function()
-    while ScreenGui.Parent do
-        if MiniButton.Visible then
-            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {Size = UDim2.new(0, 60, 0, 60)}):Play()
-            task.wait(0.8)
-            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {Size = UDim2.new(0, 55, 0, 55)}):Play()
-            task.wait(0.8)
-        else
-            task.wait(0.5)
-        end
-    end
-end)
-
 -- Анимация появления
 MainFrame.Position = UDim2.new(0.5, 0, 1.5, 0)
 TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back), {
     Position = UDim2.new(0.5, 0, 0.5, 0)
 }):Play()
 
+-- Запускаем АнтиКилл
 task.delay(0.5, function()
-    Notify("Добро пожаловать!", "Плавный полёт v3.0", 3, "fly")
+    if Config.AntiKill then
+        StartAntiKill()
+    end
+    Notify("🛡️ АнтиКилл", "Система защиты активирована", 3, "shield")
 end)
 
 -- ═══════════════════════════════════════════════════════════════
 print("═══════════════════════════════════════════════════════════")
-print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v3.0")
-print("  ✈️ Плавный полёт: Взлёт → Полёт → Спуск")
-print("  📱 Поддержка мобильных устройств")
+print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v4.0")
+print("  🛡️ АнтиКилл система активна")
+print("  ✈️ Стабильный полёт с BodyMovers")
 print("═══════════════════════════════════════════════════════════")
