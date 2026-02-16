@@ -1,7 +1,7 @@
 --[[
     ╔═══════════════════════════════════════════════════════════════╗
-    ║         ESCAPE TSUNAMI BRAINROT FARM v1.0                    ║
-    ║         Автоматический сбор брейнротов и лаки блоков         ║
+    ║         ESCAPE TSUNAMI BRAINROT FARM v2.0                    ║
+    ║         Исправлен сбор через E (ProximityPrompt)             ║
     ╚═══════════════════════════════════════════════════════════════╝
 ]]
 
@@ -14,6 +14,8 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -27,9 +29,9 @@ local Config = {
     AntiAFK = true,
     AutoCollect = true,
     TeleportBack = true,
-    CollectDelay = 0.3,
-    ScanDelay = 0.5,
-    TeleportRange = 5,
+    CollectDelay = 0.5,
+    ScanDelay = 0.3,
+    TeleportRange = 3,
     SavedPosition = nil,
     
     -- Выбранные редкости брейнротов
@@ -72,17 +74,30 @@ local RarityColors = {
     Exclusive = Color3.fromRGB(50, 255, 255)
 }
 
--- Ключевые слова для поиска
+-- Ключевые слова для определения редкости
 local RarityKeywords = {
-    Common = {"common", "обычн"},
-    Uncommon = {"uncommon", "необычн"},
-    Rare = {"rare", "редк"},
-    Epic = {"epic", "эпич"},
-    Legendary = {"legendary", "legend", "легенд"},
-    Mythic = {"mythic", "myth", "мифич"},
-    Secret = {"secret", "секрет"},
-    Divine = {"divine", "божеств"},
+    Common = {"common", "обычн", "обычный"},
+    Uncommon = {"uncommon", "необычн", "необычный"},
+    Rare = {"rare", "редк", "редкий"},
+    Epic = {"epic", "эпич", "эпический"},
+    Legendary = {"legendary", "legend", "легенд", "легендарн"},
+    Mythic = {"mythic", "myth", "мифич", "мифический"},
+    Secret = {"secret", "секрет", "секретн"},
+    Divine = {"divine", "божеств", "божественн"},
     Exclusive = {"exclusive", "эксклюзив"}
+}
+
+-- Ключевые слова для поиска брейнротов
+local BrainrotKeywords = {
+    "brainrot", "brain", "rot", "skibidi", "toilet", "ohio", 
+    "sigma", "rizz", "gyatt", "fanum", "tax", "mewing",
+    "pet", "aura", "collectible", "npc", "spawn"
+}
+
+-- Ключевые слова для лаки блоков
+local LuckyBlockKeywords = {
+    "lucky", "block", "luckyblock", "crate", "chest", "box", 
+    "reward", "loot", "prize", "gift", "present"
 }
 
 -- Статистика
@@ -220,7 +235,7 @@ end
 -- ═══════════════════════════════════════════════════════════════
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 450, 0, 600)
+MainFrame.Size = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 450, 0, 620)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundColor3 = Theme.Background
@@ -261,13 +276,6 @@ HeaderGradient.Color = ColorSequence.new({
 })
 HeaderGradient.Parent = Header
 
-local HeaderFix = Instance.new("Frame")
-HeaderFix.Size = UDim2.new(1, 0, 0, 20)
-HeaderFix.Position = UDim2.new(0, 0, 1, -20)
-HeaderFix.BackgroundColor3 = Theme.Primary
-HeaderFix.BorderSizePixel = 0
-HeaderFix.Parent = Header
-
 local Logo = Instance.new("TextLabel")
 Logo.Size = UDim2.new(0, 55, 0, 55)
 Logo.Position = UDim2.new(0, 10, 0.5, -27)
@@ -291,14 +299,14 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.new(0, 250, 0, 18)
 Subtitle.Position = UDim2.new(0, 70, 0, 40)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "Escape Tsunami Edition"
+Subtitle.Text = "v2.0 - E Key Collection"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 220)
 Subtitle.TextSize = 12
 Subtitle.Font = Enum.Font.Gotham
 Subtitle.TextXAlignment = Enum.TextXAlignment.Left
 Subtitle.Parent = Header
 
--- Кнопки управления
+-- Кнопки
 local BtnContainer = Instance.new("Frame")
 BtnContainer.Size = UDim2.new(0, 90, 0, 45)
 BtnContainer.Position = UDim2.new(1, -100, 0.5, -22)
@@ -321,15 +329,7 @@ local function CreateHeaderBtn(icon, color, callback)
     Btn.Font = Enum.Font.GothamBold
     Btn.Parent = BtnContainer
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
-    
-    Btn.MouseEnter:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0, 44, 0, 44)}):Play()
-    end)
-    Btn.MouseLeave:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0, 40, 0, 40)}):Play()
-    end)
     Btn.MouseButton1Click:Connect(callback)
-    
     return Btn
 end
 
@@ -340,7 +340,7 @@ local CloseBtn = CreateHeaderBtn("✕", Color3.fromRGB(200, 60, 60), function() 
 -- СТАТУС ПАНЕЛЬ
 -- ═══════════════════════════════════════════════════════════════
 local StatusPanel = Instance.new("Frame")
-StatusPanel.Size = UDim2.new(1, -20, 0, 80)
+StatusPanel.Size = UDim2.new(1, -20, 0, 90)
 StatusPanel.Position = UDim2.new(0, 10, 0, 70)
 StatusPanel.BackgroundColor3 = Theme.Card
 StatusPanel.BorderSizePixel = 0
@@ -348,15 +348,16 @@ StatusPanel.Parent = MainFrame
 Instance.new("UICorner", StatusPanel).CornerRadius = UDim.new(0, 12)
 
 local StatusIcon = Instance.new("TextLabel")
-StatusIcon.Size = UDim2.new(0, 60, 1, 0)
+StatusIcon.Size = UDim2.new(0, 60, 0, 60)
+StatusIcon.Position = UDim2.new(0, 5, 0, 5)
 StatusIcon.BackgroundTransparency = 1
 StatusIcon.Text = "⏸️"
 StatusIcon.TextSize = 35
 StatusIcon.Parent = StatusPanel
 
 local StatusTitle = Instance.new("TextLabel")
-StatusTitle.Size = UDim2.new(0.5, -70, 0, 25)
-StatusTitle.Position = UDim2.new(0, 65, 0, 15)
+StatusTitle.Size = UDim2.new(0.55, -70, 0, 25)
+StatusTitle.Position = UDim2.new(0, 65, 0, 10)
 StatusTitle.BackgroundTransparency = 1
 StatusTitle.Text = "Статус: Ожидание"
 StatusTitle.TextColor3 = Theme.Text
@@ -366,34 +367,45 @@ StatusTitle.TextXAlignment = Enum.TextXAlignment.Left
 StatusTitle.Parent = StatusPanel
 
 local StatusInfo = Instance.new("TextLabel")
-StatusInfo.Size = UDim2.new(0.5, -70, 0, 20)
-StatusInfo.Position = UDim2.new(0, 65, 0, 42)
+StatusInfo.Size = UDim2.new(0.55, -70, 0, 20)
+StatusInfo.Position = UDim2.new(0, 65, 0, 35)
 StatusInfo.BackgroundTransparency = 1
-StatusInfo.Text = "Собрано: 0 | Брейнроты: 0 | Блоки: 0"
+StatusInfo.Text = "Собрано: 0"
 StatusInfo.TextColor3 = Theme.TextDim
 StatusInfo.TextSize = 11
 StatusInfo.Font = Enum.Font.Gotham
 StatusInfo.TextXAlignment = Enum.TextXAlignment.Left
 StatusInfo.Parent = StatusPanel
 
+local StatusInfo2 = Instance.new("TextLabel")
+StatusInfo2.Size = UDim2.new(0.55, -70, 0, 20)
+StatusInfo2.Position = UDim2.new(0, 65, 0, 55)
+StatusInfo2.BackgroundTransparency = 1
+StatusInfo2.Text = "🧠 0 | 🎁 0"
+StatusInfo2.TextColor3 = Theme.TextDim
+StatusInfo2.TextSize = 11
+StatusInfo2.Font = Enum.Font.Gotham
+StatusInfo2.TextXAlignment = Enum.TextXAlignment.Left
+StatusInfo2.Parent = StatusPanel
+
 -- Кнопка Start/Stop
 local StartButton = Instance.new("TextButton")
-StartButton.Size = UDim2.new(0, 120, 0, 50)
-StartButton.Position = UDim2.new(1, -135, 0.5, -25)
+StartButton.Size = UDim2.new(0, 130, 0, 60)
+StartButton.Position = UDim2.new(1, -145, 0.5, -30)
 StartButton.BackgroundColor3 = Theme.Success
 StartButton.Text = "▶️ СТАРТ"
 StartButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-StartButton.TextSize = 14
+StartButton.TextSize = 16
 StartButton.Font = Enum.Font.GothamBold
 StartButton.Parent = StatusPanel
-Instance.new("UICorner", StartButton).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", StartButton).CornerRadius = UDim.new(0, 12)
 
 -- ═══════════════════════════════════════════════════════════════
 -- ТАБЫ
 -- ═══════════════════════════════════════════════════════════════
 local TabContainer = Instance.new("Frame")
 TabContainer.Size = UDim2.new(1, -20, 0, 45)
-TabContainer.Position = UDim2.new(0, 10, 0, 155)
+TabContainer.Position = UDim2.new(0, 10, 0, 165)
 TabContainer.BackgroundColor3 = Theme.Card
 TabContainer.BorderSizePixel = 0
 TabContainer.Parent = MainFrame
@@ -417,8 +429,8 @@ local TabContents = {}
 local CurrentTab = 1
 
 local ContentContainer = Instance.new("Frame")
-ContentContainer.Size = UDim2.new(1, -20, 1, -220)
-ContentContainer.Position = UDim2.new(0, 10, 0, 205)
+ContentContainer.Size = UDim2.new(1, -20, 1, -230)
+ContentContainer.Position = UDim2.new(0, 10, 0, 215)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.ClipsDescendants = true
 ContentContainer.Parent = MainFrame
@@ -503,7 +515,6 @@ local function CreateRarityToggle(parent, rarityName, configTable)
     Toggle.Parent = parent
     Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 10)
     
-    -- Цветовая метка редкости
     local RarityBadge = Instance.new("Frame")
     RarityBadge.Size = UDim2.new(0, 8, 0.7, 0)
     RarityBadge.Position = UDim2.new(0, 8, 0.15, 0)
@@ -512,7 +523,6 @@ local function CreateRarityToggle(parent, rarityName, configTable)
     RarityBadge.Parent = Toggle
     Instance.new("UICorner", RarityBadge).CornerRadius = UDim.new(0, 4)
     
-    -- Иконка редкости
     local RarityIcon = Instance.new("TextLabel")
     RarityIcon.Size = UDim2.new(0, 35, 0, 35)
     RarityIcon.Position = UDim2.new(0, 25, 0.5, -17)
@@ -531,8 +541,8 @@ local function CreateRarityToggle(parent, rarityName, configTable)
     Instance.new("UICorner", RarityIcon).CornerRadius = UDim.new(0, 8)
     
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0.5, -80, 0, 20)
-    NameLabel.Position = UDim2.new(0, 70, 0, 10)
+    NameLabel.Size = UDim2.new(0.5, -80, 0, 25)
+    NameLabel.Position = UDim2.new(0, 70, 0.5, -12)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Text = rarityName
     NameLabel.TextColor3 = RarityColors[rarityName] or Theme.Text
@@ -540,17 +550,6 @@ local function CreateRarityToggle(parent, rarityName, configTable)
     NameLabel.Font = Enum.Font.GothamBold
     NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     NameLabel.Parent = Toggle
-    
-    local DescLabel = Instance.new("TextLabel")
-    DescLabel.Size = UDim2.new(0.5, -80, 0, 16)
-    DescLabel.Position = UDim2.new(0, 70, 0, 32)
-    DescLabel.BackgroundTransparency = 1
-    DescLabel.Text = "Нажмите чтобы " .. (configTable[rarityName] and "отключить" or "включить")
-    DescLabel.TextColor3 = Theme.TextDim
-    DescLabel.TextSize = 11
-    DescLabel.Font = Enum.Font.Gotham
-    DescLabel.TextXAlignment = Enum.TextXAlignment.Left
-    DescLabel.Parent = Toggle
     
     local SwitchBG = Instance.new("Frame")
     SwitchBG.Size = UDim2.new(0, 55, 0, 28)
@@ -576,24 +575,15 @@ local function CreateRarityToggle(parent, rarityName, configTable)
         configTable[rarityName] = not configTable[rarityName]
         local enabled = configTable[rarityName]
         
-        DescLabel.Text = "Нажмите чтобы " .. (enabled and "отключить" or "включить")
-        
         TweenService:Create(SwitchBG, TweenInfo.new(0.2), {
             BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)
         }):Play()
         TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {
             Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
         }):Play()
-        
-        -- Подсветка
-        TweenService:Create(Toggle, TweenInfo.new(0.1), {
-            BackgroundColor3 = enabled and Color3.fromRGB(40, 55, 45) or Theme.Card
-        }):Play()
-        task.wait(0.15)
-        TweenService:Create(Toggle, TweenInfo.new(0.2), {
-            BackgroundColor3 = Theme.Card
-        }):Play()
     end)
+    
+    return SwitchBG, Circle
 end
 
 local function CreateToggle(parent, name, configKey, desc)
@@ -776,12 +766,6 @@ local function CreateButton(parent, name, icon, color, callback)
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Button
     
-    Button.MouseEnter:Connect(function()
-        TweenService:Create(Button, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 54)}):Play()
-    end)
-    Button.MouseLeave:Connect(function()
-        TweenService:Create(Button, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 50)}):Play()
-    end)
     Button.MouseButton1Click:Connect(callback)
 end
 
@@ -793,9 +777,10 @@ end
 CreateSection(TabContents[1], "ВЫБЕРИТЕ РЕДКОСТИ", "🧠")
 
 local rarities = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret", "Divine", "Exclusive"}
+local brainrotToggles = {}
 
 for _, rarity in ipairs(rarities) do
-    CreateRarityToggle(TabContents[1], rarity, Config.Brainrots)
+    brainrotToggles[rarity] = {CreateRarityToggle(TabContents[1], rarity, Config.Brainrots)}
 end
 
 CreateSection(TabContents[1], "БЫСТРЫЙ ВЫБОР", "⚡")
@@ -803,29 +788,30 @@ CreateSection(TabContents[1], "БЫСТРЫЙ ВЫБОР", "⚡")
 CreateButton(TabContents[1], "Выбрать все", "✅", Theme.Success, function()
     for _, r in ipairs(rarities) do
         Config.Brainrots[r] = true
+        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(1, -25, 0.5, -11)}):Play()
     end
     Notify("Брейнроты", "Все редкости выбраны", 2, "success")
-    -- Обновляем UI
-    for _, child in ipairs(TabContents[1]:GetChildren()) do
-        if child:IsA("Frame") and child:FindFirstChild("TextButton") then
-            local switchBG = child:FindFirstChild("Frame", true)
-            if switchBG and switchBG.Size == UDim2.new(0, 55, 0, 28) then
-                TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play()
-            end
-        end
-    end
 end)
 
 CreateButton(TabContents[1], "Снять все", "❌", Theme.Error, function()
     for _, r in ipairs(rarities) do
         Config.Brainrots[r] = false
+        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Брейнроты", "Все редкости сняты", 2, "info")
 end)
 
 CreateButton(TabContents[1], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
     for _, r in ipairs(rarities) do
-        Config.Brainrots[r] = r ~= "Common" and r ~= "Uncommon"
+        local enabled = r ~= "Common" and r ~= "Uncommon"
+        Config.Brainrots[r] = enabled
+        local switchBG, circle = brainrotToggles[r][1], brainrotToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Брейнроты", "Выбраны: Rare и выше", 2, "success")
 end)
@@ -833,8 +819,10 @@ end)
 -- ТАБ 2: ЛАКИ БЛОКИ
 CreateSection(TabContents[2], "ВЫБЕРИТЕ РЕДКОСТИ", "🎁")
 
+local luckyToggles = {}
+
 for _, rarity in ipairs(rarities) do
-    CreateRarityToggle(TabContents[2], rarity, Config.LuckyBlocks)
+    luckyToggles[rarity] = {CreateRarityToggle(TabContents[2], rarity, Config.LuckyBlocks)}
 end
 
 CreateSection(TabContents[2], "БЫСТРЫЙ ВЫБОР", "⚡")
@@ -842,6 +830,9 @@ CreateSection(TabContents[2], "БЫСТРЫЙ ВЫБОР", "⚡")
 CreateButton(TabContents[2], "Выбрать все", "✅", Theme.Success, function()
     for _, r in ipairs(rarities) do
         Config.LuckyBlocks[r] = true
+        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(1, -25, 0.5, -11)}):Play()
     end
     Notify("Лаки блоки", "Все редкости выбраны", 2, "success")
 end)
@@ -849,13 +840,20 @@ end)
 CreateButton(TabContents[2], "Снять все", "❌", Theme.Error, function()
     for _, r in ipairs(rarities) do
         Config.LuckyBlocks[r] = false
+        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 80)}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Лаки блоки", "Все редкости сняты", 2, "info")
 end)
 
 CreateButton(TabContents[2], "Только редкие+", "💎", Color3.fromRGB(180, 100, 255), function()
     for _, r in ipairs(rarities) do
-        Config.LuckyBlocks[r] = r ~= "Common" and r ~= "Uncommon"
+        local enabled = r ~= "Common" and r ~= "Uncommon"
+        Config.LuckyBlocks[r] = enabled
+        local switchBG, circle = luckyToggles[r][1], luckyToggles[r][2]
+        TweenService:Create(switchBG, TweenInfo.new(0.2), {BackgroundColor3 = enabled and Theme.Success or Color3.fromRGB(60, 60, 80)}):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2), {Position = enabled and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)}):Play()
     end
     Notify("Лаки блоки", "Выбраны: Rare и выше", 2, "success")
 end)
@@ -863,13 +861,13 @@ end)
 -- ТАБ 3: НАСТРОЙКИ
 CreateSection(TabContents[3], "ОСНОВНЫЕ", "⚙️")
 CreateToggle(TabContents[3], "Анти-АФК", "AntiAFK", "Не кикает за бездействие")
-CreateToggle(TabContents[3], "Авто-сбор", "AutoCollect", "Автоматически собирать предметы")
-CreateToggle(TabContents[3], "Телепорт назад", "TeleportBack", "Возвращаться на место")
+CreateToggle(TabContents[3], "Авто-сбор", "AutoCollect", "Автоматически собирать")
+CreateToggle(TabContents[3], "Телепорт назад", "TeleportBack", "Возвращаться после сбора")
 
 CreateSection(TabContents[3], "ТАЙМИНГИ", "⏱️")
 CreateSlider(TabContents[3], "Задержка сбора (сек)", "CollectDelay", 0.1, 2)
-CreateSlider(TabContents[3], "Задержка скана (сек)", "ScanDelay", 0.2, 3)
-CreateSlider(TabContents[3], "Дистанция ТП", "TeleportRange", 3, 15)
+CreateSlider(TabContents[3], "Задержка скана (сек)", "ScanDelay", 0.1, 2)
+CreateSlider(TabContents[3], "Дистанция ТП", "TeleportRange", 1, 10)
 
 CreateSection(TabContents[3], "ДЕЙСТВИЯ", "⚡")
 CreateButton(TabContents[3], "Сбросить статистику", "🔄", Color3.fromRGB(100, 100, 150), function()
@@ -892,10 +890,9 @@ CreateButton(TabContents[3], "Телепорт на позицию", "🏠", Col
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if root then
             root.CFrame = Config.SavedPosition
-            Notify("Телепорт", "Выполнен", 2, "success")
         end
     else
-        Notify("Ошибка", "Позиция не сохранена", 2, "error")
+        Notify("Ошибка", "Сохраните позицию сначала", 2, "error")
     end
 end)
 
@@ -917,7 +914,7 @@ MiniStroke.Color = Theme.Primary
 MiniStroke.Thickness = 3
 MiniStroke.Parent = MiniButton
 
--- Перетаскивание мини-кнопки
+-- Перетаскивание
 local dragMini = false
 local dragStartMini, startPosMini
 
@@ -941,16 +938,9 @@ end)
 MiniButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = true
     MiniButton.Visible = false
-    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-        Position = UDim2.new(0.5, 0, 0.5, 0)
-    }):Play()
 end)
 
 MinBtn.MouseButton1Click:Connect(function()
-    TweenService:Create(MainFrame, TweenInfo.new(0.3), {
-        Position = UDim2.new(0.5, 0, 1.5, 0)
-    }):Play()
-    task.wait(0.3)
     MainFrame.Visible = false
     MiniButton.Visible = true
 end)
@@ -999,17 +989,91 @@ local function GetHumanoid()
     return char and char:FindFirstChildOfClass("Humanoid")
 end
 
--- Определение редкости по имени/цвету
+-- ═══════════════════════════════════════════════════════════════
+-- ФУНКЦИЯ СБОРА ЧЕРЕЗ E (PROXIMITY PROMPT)
+-- ═══════════════════════════════════════════════════════════════
+
+local function FireProximityPrompt(prompt, holdDuration)
+    holdDuration = holdDuration or prompt.HoldDuration
+    
+    -- Метод 1: fireproximityprompt (лучший)
+    if fireproximityprompt then
+        fireproximityprompt(prompt, holdDuration)
+        return true
+    end
+    
+    -- Метод 2: Через события
+    local success = pcall(function()
+        -- Симулируем начало взаимодействия
+        prompt:InputHoldBegin()
+        
+        if holdDuration > 0 then
+            task.wait(holdDuration + 0.1)
+        else
+            task.wait(0.1)
+        end
+        
+        prompt:InputHoldEnd()
+    end)
+    
+    if success then return true end
+    
+    -- Метод 3: Триггер напрямую
+    success = pcall(function()
+        prompt.Triggered:Fire()
+    end)
+    
+    if success then return true end
+    
+    -- Метод 4: Через ProximityPromptService
+    success = pcall(function()
+        ProximityPromptService.PromptTriggered:Fire(prompt, LocalPlayer)
+    end)
+    
+    return success
+end
+
+-- Симуляция нажатия E
+local function PressE()
+    -- Метод 1: VirtualInputManager
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+    
+    -- Метод 2: keypress
+    if keypress and keyrelease then
+        pcall(function()
+            keypress(0x45) -- E key
+            task.wait(0.05)
+            keyrelease(0x45)
+        end)
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ОПРЕДЕЛЕНИЕ РЕДКОСТИ
+-- ═══════════════════════════════════════════════════════════════
+
 local function GetRarity(object)
+    -- Проверяем имя объекта
     local name = object.Name:lower()
     
     -- Проверяем атрибуты
-    local rarityAttr = object:GetAttribute("Rarity") or object:GetAttribute("rarity")
+    local rarityAttr = object:GetAttribute("Rarity") or object:GetAttribute("rarity") or object:GetAttribute("RARITY")
     if rarityAttr then
-        return tostring(rarityAttr)
+        local attrLower = tostring(rarityAttr):lower()
+        for rarity, keywords in pairs(RarityKeywords) do
+            for _, keyword in ipairs(keywords) do
+                if attrLower:find(keyword) then
+                    return rarity
+                end
+            end
+        end
     end
     
-    -- Проверяем по имени
+    -- Проверяем по имени объекта
     for rarity, keywords in pairs(RarityKeywords) do
         for _, keyword in ipairs(keywords) do
             if name:find(keyword) then
@@ -1018,30 +1082,9 @@ local function GetRarity(object)
         end
     end
     
-    -- Проверяем цвет (если есть)
-    local primaryPart = object:IsA("Model") and object.PrimaryPart or (object:IsA("BasePart") and object)
-    if primaryPart and primaryPart:IsA("BasePart") then
-        local color = primaryPart.Color
-        
-        -- Примерное определение по цвету
-        if color.R > 0.8 and color.G > 0.8 and color.B > 0.8 then
-            return "Common"
-        elseif color.G > 0.7 and color.R < 0.5 and color.B < 0.5 then
-            return "Uncommon"
-        elseif color.B > 0.7 and color.R < 0.5 and color.G < 0.7 then
-            return "Rare"
-        elseif color.R > 0.5 and color.B > 0.7 then
-            return "Epic"
-        elseif color.R > 0.8 and color.G > 0.5 and color.B < 0.3 then
-            return "Legendary"
-        elseif color.R > 0.8 and color.G < 0.4 then
-            return "Mythic"
-        end
-    end
-    
-    -- Проверяем в потомках на GUI с редкостью
+    -- Проверяем в потомках (GUI, TextLabels)
     for _, desc in ipairs(object:GetDescendants()) do
-        if desc:IsA("TextLabel") then
+        if desc:IsA("TextLabel") or desc:IsA("TextButton") then
             local text = desc.Text:lower()
             for rarity, keywords in pairs(RarityKeywords) do
                 for _, keyword in ipairs(keywords) do
@@ -1053,35 +1096,138 @@ local function GetRarity(object)
         end
     end
     
+    -- Проверяем родителя
+    if object.Parent then
+        local parentName = object.Parent.Name:lower()
+        for rarity, keywords in pairs(RarityKeywords) do
+            for _, keyword in ipairs(keywords) do
+                if parentName:find(keyword) then
+                    return rarity
+                end
+            end
+        end
+    end
+    
     return nil
 end
 
--- Поиск брейнротов
-local function FindBrainrots()
+-- ═══════════════════════════════════════════════════════════════
+-- ПОИСК ОБЪЕКТОВ
+-- ═══════════════════════════════════════════════════════════════
+
+local function IsBrainrot(object)
+    local name = object.Name:lower()
+    for _, keyword in ipairs(BrainrotKeywords) do
+        if name:find(keyword) then
+            return true
+        end
+    end
+    return false
+end
+
+local function IsLuckyBlock(object)
+    local name = object.Name:lower()
+    for _, keyword in ipairs(LuckyBlockKeywords) do
+        if name:find(keyword) then
+            return true
+        end
+    end
+    return false
+end
+
+local function FindAllCollectibles()
     local found = {}
     
-    -- Ищем в Workspace
+    -- Ищем все ProximityPrompts в игре
+    for _, prompt in ipairs(Workspace:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") then
+            local parent = prompt.Parent
+            if parent then
+                local name = parent.Name:lower()
+                local rarity = GetRarity(parent)
+                
+                -- Проверяем, является ли это брейнротом
+                local isBrainrot = IsBrainrot(parent)
+                if isBrainrot and rarity and Config.Brainrots[rarity] then
+                    local pos = parent:IsA("Model") and parent:GetPivot().Position or 
+                               parent:IsA("BasePart") and parent.Position or
+                               prompt.Parent:IsA("BasePart") and prompt.Parent.Position
+                    
+                    if pos then
+                        table.insert(found, {
+                            Object = parent,
+                            Prompt = prompt,
+                            Position = pos,
+                            Rarity = rarity,
+                            Type = "Brainrot"
+                        })
+                    end
+                end
+                
+                -- Проверяем, является ли это лаки блоком
+                local isLucky = IsLuckyBlock(parent)
+                if isLucky and rarity and Config.LuckyBlocks[rarity] then
+                    local pos = parent:IsA("Model") and parent:GetPivot().Position or 
+                               parent:IsA("BasePart") and parent.Position or
+                               prompt.Parent:IsA("BasePart") and prompt.Parent.Position
+                    
+                    if pos then
+                        table.insert(found, {
+                            Object = parent,
+                            Prompt = prompt,
+                            Position = pos,
+                            Rarity = rarity,
+                            Type = "LuckyBlock"
+                        })
+                    end
+                end
+                
+                -- Если редкость определена но тип неизвестен - проверяем просто по редкости
+                if not isBrainrot and not isLucky and rarity then
+                    -- Проверяем брейнроты
+                    if Config.Brainrots[rarity] then
+                        local pos = parent:IsA("Model") and parent:GetPivot().Position or 
+                                   parent:IsA("BasePart") and parent.Position or
+                                   prompt.Parent:IsA("BasePart") and prompt.Parent.Position
+                        
+                        if pos then
+                            table.insert(found, {
+                                Object = parent,
+                                Prompt = prompt,
+                                Position = pos,
+                                Rarity = rarity,
+                                Type = "Unknown"
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Также ищем модели без ProximityPrompt но с определённой редкостью
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        
-        -- Проверяем является ли это брейнротом
-        local isBrainrot = name:find("brainrot") or 
-                          name:find("brain") or 
-                          name:find("rot") or
-                          name:find("pet") or
-                          name:find("collectible") or
-                          name:find("spawn")
-        
-        if isBrainrot and (obj:IsA("Model") or obj:IsA("BasePart")) then
+        if (obj:IsA("Model") or obj:IsA("BasePart")) and not obj:FindFirstChildOfClass("ProximityPrompt") then
             local rarity = GetRarity(obj)
-            if rarity and Config.Brainrots[rarity] then
-                local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
-                table.insert(found, {
-                    Object = obj,
-                    Position = pos,
-                    Rarity = rarity,
-                    Type = "Brainrot"
-                })
+            if rarity then
+                local isBrainrot = IsBrainrot(obj)
+                local isLucky = IsLuckyBlock(obj)
+                
+                if (isBrainrot and Config.Brainrots[rarity]) or (isLucky and Config.LuckyBlocks[rarity]) then
+                    -- Проверяем есть ли ProximityPrompt в потомках
+                    local prompt = obj:FindFirstChildOfClass("ProximityPrompt", true)
+                    local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
+                    
+                    if pos then
+                        table.insert(found, {
+                            Object = obj,
+                            Prompt = prompt,
+                            Position = pos,
+                            Rarity = rarity,
+                            Type = isBrainrot and "Brainrot" or "LuckyBlock"
+                        })
+                    end
+                end
             end
         end
     end
@@ -1089,102 +1235,78 @@ local function FindBrainrots()
     return found
 end
 
--- Поиск лаки блоков
-local function FindLuckyBlocks()
-    local found = {}
-    
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        
-        -- Проверяем является ли это лаки блоком
-        local isLuckyBlock = name:find("lucky") or 
-                            name:find("block") or 
-                            name:find("crate") or
-                            name:find("chest") or
-                            name:find("box") or
-                            name:find("reward")
-        
-        if isLuckyBlock and (obj:IsA("Model") or obj:IsA("BasePart")) then
-            local rarity = GetRarity(obj)
-            if rarity and Config.LuckyBlocks[rarity] then
-                local pos = obj:IsA("Model") and obj:GetPivot().Position or obj.Position
-                table.insert(found, {
-                    Object = obj,
-                    Position = pos,
-                    Rarity = rarity,
-                    Type = "LuckyBlock"
-                })
-            end
-        end
-    end
-    
-    return found
-end
+-- ═══════════════════════════════════════════════════════════════
+-- ФУНКЦИЯ СБОРА
+-- ═══════════════════════════════════════════════════════════════
 
--- Телепорт к объекту
-local function TeleportTo(position)
+local function CollectItem(item)
     local root = GetRootPart()
     if not root then return false end
     
-    root.CFrame = CFrame.new(position + Vector3.new(0, Config.TeleportRange, 0))
-    return true
-end
-
--- Сбор объекта
-local function CollectObject(item)
-    local root = GetRootPart()
-    if not root then return false end
+    -- Сохраняем позицию
+    local originalPosition = root.CFrame
     
     -- Телепортируемся к объекту
-    TeleportTo(item.Position)
-    task.wait(Config.CollectDelay)
+    local targetPos = item.Position + Vector3.new(0, Config.TeleportRange, 0)
+    root.CFrame = CFrame.new(targetPos)
     
-    -- Пытаемся взаимодействовать
-    local obj = item.Object
+    task.wait(0.1)
     
-    -- Метод 1: ProximityPrompt
-    for _, desc in ipairs(obj:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            fireproximityprompt(desc)
-            return true
-        end
+    -- Пытаемся собрать через ProximityPrompt
+    local collected = false
+    
+    if item.Prompt then
+        -- Способ 1: fireproximityprompt
+        collected = FireProximityPrompt(item.Prompt)
+        task.wait(Config.CollectDelay)
     end
     
-    -- Метод 2: ClickDetector
-    for _, desc in ipairs(obj:GetDescendants()) do
-        if desc:IsA("ClickDetector") then
-            fireclickdetector(desc)
-            return true
-        end
-    end
-    
-    -- Метод 3: Touch
-    if obj:IsA("BasePart") then
-        firetouchinterest(root, obj, 0)
-        task.wait(0.1)
-        firetouchinterest(root, obj, 1)
-        return true
-    elseif obj:IsA("Model") then
-        local part = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
-        if part then
-            firetouchinterest(root, part, 0)
-            task.wait(0.1)
-            firetouchinterest(root, part, 1)
-            return true
-        end
-    end
-    
-    -- Метод 4: Remote Events
-    local remotes = ReplicatedStorage:GetDescendants()
-    for _, remote in ipairs(remotes) do
-        if remote:IsA("RemoteEvent") then
-            local name = remote.Name:lower()
-            if name:find("collect") or name:find("claim") or name:find("pickup") or name:find("grab") then
-                pcall(function()
-                    remote:FireServer(obj)
-                end)
+    -- Если не сработало, пробуем найти промпт рядом
+    if not collected then
+        for _, prompt in ipairs(Workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                local promptPos = prompt.Parent and prompt.Parent:IsA("BasePart") and prompt.Parent.Position
+                if promptPos then
+                    local dist = (promptPos - item.Position).Magnitude
+                    if dist < 15 then
+                        FireProximityPrompt(prompt)
+                        task.wait(0.2)
+                        collected = true
+                        break
+                    end
+                end
             end
         end
+    end
+    
+    -- Дополнительно нажимаем E
+    PressE()
+    task.wait(0.1)
+    PressE()
+    
+    -- Касаемся объекта
+    if item.Object and item.Object:IsA("BasePart") then
+        pcall(function()
+            firetouchinterest(root, item.Object, 0)
+            task.wait(0.1)
+            firetouchinterest(root, item.Object, 1)
+        end)
+    elseif item.Object and item.Object:IsA("Model") then
+        local part = item.Object.PrimaryPart or item.Object:FindFirstChildOfClass("BasePart")
+        if part then
+            pcall(function()
+                firetouchinterest(root, part, 0)
+                task.wait(0.1)
+                firetouchinterest(root, part, 1)
+            end)
+        end
+    end
+    
+    task.wait(Config.CollectDelay)
+    
+    -- Возвращаемся
+    if Config.TeleportBack then
+        root.CFrame = originalPosition
     end
     
     return true
@@ -1193,11 +1315,11 @@ end
 -- ═══════════════════════════════════════════════════════════════
 -- КНОПКА СТАРТ
 -- ═══════════════════════════════════════════════════════════════
+
 StartButton.MouseButton1Click:Connect(function()
     Config.Farming = not Config.Farming
     
     if Config.Farming then
-        -- Сохраняем позицию
         local root = GetRootPart()
         if root and not Config.SavedPosition then
             Config.SavedPosition = root.CFrame
@@ -1222,17 +1344,14 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 -- ГЛАВНЫЙ ЦИКЛ
 -- ═══════════════════════════════════════════════════════════════
+
 spawn(function()
     while ScreenGui.Parent do
         task.wait(Config.ScanDelay)
         
         -- Обновляем статус
-        StatusInfo.Text = string.format(
-            "Собрано: %d | Брейнроты: %d | Блоки: %d",
-            Stats.Collected,
-            Stats.BrainrotsCollected,
-            Stats.LuckyBlocksCollected
-        )
+        StatusInfo.Text = "Собрано: " .. Stats.Collected
+        StatusInfo2.Text = "🧠 " .. Stats.BrainrotsCollected .. " | 🎁 " .. Stats.LuckyBlocksCollected
         
         if not Config.Farming then continue end
         
@@ -1240,57 +1359,51 @@ spawn(function()
         local root = GetRootPart()
         if not char or not root then continue end
         
-        -- Сохраняем текущую позицию если включён возврат
-        local returnPosition = Config.TeleportBack and root.CFrame or nil
+        -- Сохраняем позицию для возврата
+        local returnPosition = root.CFrame
         
-        -- Ищем брейнроты
-        local brainrots = FindBrainrots()
-        for _, item in ipairs(brainrots) do
-            if not Config.Farming then break end
-            
-            StatusTitle.Text = "Статус: 🔍 Нашёл " .. item.Rarity .. " Brainrot"
-            
-            if CollectObject(item) then
-                Stats.Collected = Stats.Collected + 1
-                Stats.BrainrotsCollected = Stats.BrainrotsCollected + 1
-                
-                Notify(
-                    item.Rarity .. " Brainrot!",
-                    "Успешно собран",
-                    2,
-                    "collect"
-                )
-            end
-            
-            task.wait(Config.CollectDelay)
+        -- Ищем все предметы
+        local items = FindAllCollectibles()
+        
+        if #items > 0 then
+            StatusTitle.Text = "Статус: 🔍 Найдено: " .. #items
+        else
+            StatusTitle.Text = "Статус: 🟢 Сканирование..."
         end
         
-        -- Ищем лаки блоки
-        local luckyBlocks = FindLuckyBlocks()
-        for _, item in ipairs(luckyBlocks) do
+        for _, item in ipairs(items) do
             if not Config.Farming then break end
             
-            StatusTitle.Text = "Статус: 🔍 Нашёл " .. item.Rarity .. " Lucky Block"
+            -- Проверяем что объект ещё существует
+            if not item.Object or not item.Object.Parent then continue end
             
-            if CollectObject(item) then
+            StatusTitle.Text = "Статус: 📍 " .. item.Rarity .. " " .. item.Type
+            
+            if CollectItem(item) then
                 Stats.Collected = Stats.Collected + 1
-                Stats.LuckyBlocksCollected = Stats.LuckyBlocksCollected + 1
+                
+                if item.Type == "Brainrot" or item.Type == "Unknown" then
+                    Stats.BrainrotsCollected = Stats.BrainrotsCollected + 1
+                else
+                    Stats.LuckyBlocksCollected = Stats.LuckyBlocksCollected + 1
+                end
                 
                 Notify(
-                    item.Rarity .. " Lucky Block!",
+                    item.Rarity .. " " .. item.Type .. "!",
                     "Успешно собран",
                     2,
                     "collect"
                 )
             end
             
-            task.wait(Config.CollectDelay)
+            task.wait(0.2)
         end
         
         -- Возвращаемся на позицию
-        if Config.TeleportBack and returnPosition and Config.Farming then
+        if Config.TeleportBack and Config.SavedPosition then
+            root.CFrame = Config.SavedPosition
+        elseif Config.TeleportBack then
             root.CFrame = returnPosition
-            StatusTitle.Text = "Статус: 🟢 Сканирование..."
         end
     end
 end)
@@ -1298,21 +1411,33 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 -- АНТИ-АФК
 -- ═══════════════════════════════════════════════════════════════
+
 spawn(function()
     while ScreenGui.Parent do
         task.wait(30)
         if Config.AntiAFK then
+            -- VirtualUser
             pcall(function()
                 local vu = game:GetService("VirtualUser")
                 vu:CaptureController()
                 vu:ClickButton2(Vector2.new())
             end)
             
-            -- Дополнительно - движение камеры
+            -- Движение
             local hum = GetHumanoid()
             if hum then
                 hum:Move(Vector3.new(0, 0, 0))
+                hum.Jump = true
             end
+            
+            -- Нажатие клавиши
+            pcall(function()
+                if keypress then
+                    keypress(0x57) -- W
+                    task.wait(0.1)
+                    keyrelease(0x57)
+                end
+            end)
         end
     end
 end)
@@ -1321,7 +1446,6 @@ end)
 -- АНИМАЦИИ
 -- ═══════════════════════════════════════════════════════════════
 
--- Радужная обводка
 spawn(function()
     local hue = 0
     while ScreenGui.Parent do
@@ -1333,17 +1457,13 @@ spawn(function()
     end
 end)
 
--- Пульсация мини-кнопки
+-- Пульсация
 spawn(function()
     while ScreenGui.Parent do
         if MiniButton.Visible then
-            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
-                Size = UDim2.new(0, 65, 0, 65)
-            }):Play()
+            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {Size = UDim2.new(0, 65, 0, 65)}):Play()
             task.wait(0.8)
-            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
-                Size = UDim2.new(0, 60, 0, 60)
-            }):Play()
+            TweenService:Create(MiniButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {Size = UDim2.new(0, 60, 0, 60)}):Play()
             task.wait(0.8)
         else
             task.wait(0.5)
@@ -1357,14 +1477,13 @@ TweenService:Create(MainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back), {
     Position = UDim2.new(0.5, 0, 0.5, 0)
 }):Play()
 
--- Приветствие
 task.delay(0.5, function()
-    Notify("Добро пожаловать!", "Brainrot Farm загружен", 3, "success")
+    Notify("Добро пожаловать!", "Brainrot Farm v2.0 - E Key Collection", 3, "success")
 end)
 
 -- ═══════════════════════════════════════════════════════════════
 print("═══════════════════════════════════════════════════════════")
-print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v1.0")
-print("  ✅ Скрипт загружен")
+print("  🧠 ESCAPE TSUNAMI BRAINROT FARM v2.0")
+print("  ✅ Исправлен сбор через E (ProximityPrompt)")
 print("  📱 Поддержка мобильных устройств")
 print("═══════════════════════════════════════════════════════════")
